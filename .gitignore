@@ -1,0 +1,15 @@
+*.txt
+*.sql
+*.log
+*.pyc
+*.swp
+*.swo
+software/
+finalstatresult/
+test/
+*.org
+*.log*
+tags
+*.orig
+script/old_src/
+data/
