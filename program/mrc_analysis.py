@@ -18,6 +18,13 @@ import time
 import glob,os.path
 from random import shuffle
 logger = MyLogger().getLogger()
+fileHandler = logger.handlers[1]
+logFileName = fileHandler.baseFilename
+"""
+if old log file is exist, we trunk it into a empty log file 
+"""
+open(logFileName, "w")
+
 def getLevel12Dirs(inputDir):
     """
     Obtain all dirs with the depth == 2, similar to use linux command find with -maxdepth to 2
@@ -38,23 +45,41 @@ def getLevel12Dirs(inputDir):
     dirsDepth1 = dirsDepth1 + dirsDepth1Hidden
 
     """
+    Remove dirs that is s symbol link
+    """
+    dirsDepth1Final = filter(lambda f: os.path.islink(f) == False, dirsDepth1)
+    symbolLinkDirs = filter(lambda f: os.path.islink(f) == True, dirsDepth1)
+
+    """
     Obtain all level two dirs
     """
     fileDepth2 = glob.glob(inputDir + '/*/*')
-    dirsDepth2 = filter(lambda f: os.path.isdir(f), fileDepth2);
+    dirsDepth2 = filter(lambda f: os.path.isdir(f) and os.path.islink(f) == False, fileDepth2);
 
     fileDepth2Hidden1 = glob.glob(inputDir + '/.*/*')
-    dirsDepth2Hidden1 = filter(lambda f: os.path.isdir(f), fileDepth2Hidden1);
+    dirsDepth2Hidden1 = filter(lambda f: os.path.isdir(f) and os.path.islink(f) == False, fileDepth2Hidden1);
 
     fileDepth2Hidden2 = glob.glob(inputDir + '/.*/.*')
-    dirsDepth2Hidden2 = filter(lambda f: os.path.isdir(f), fileDepth2Hidden2);
+    dirsDepth2Hidden2 = filter(lambda f: os.path.isdir(f) and os.path.islink(f) == False, fileDepth2Hidden2);
 
     fileDepth2Hidden3 = glob.glob(inputDir + '/*/.*')
-    dirsDepth2Hidden3 = filter(lambda f: os.path.isdir(f), fileDepth2Hidden3);
+    dirsDepth2Hidden3 = filter(lambda f: os.path.isdir(f) and os.path.islink(f) == False,  fileDepth2Hidden3);
 
 
     dirsDepth2 = dirsDepth2 + dirsDepth2Hidden1 + dirsDepth2Hidden2 + dirsDepth2Hidden3
-    return (dirsDepth1, dirsDepth2)
+
+    """
+    Remove dirs that are located in symbol link dirs
+    """
+    dirsDepth2Final = []
+    for item in dirsDepth2:
+        dirName = os.path.dirname(item)
+        if(dirName not in symbolLinkDirs):
+            dirsDepth2Final.append(item)
+
+
+    return (dirsDepth1Final, dirsDepth2Final)
+
 
 def getLevel12RegularFiles(inputDir):
     """
@@ -75,8 +100,6 @@ def getLevel12RegularFiles(inputDir):
     """
     fileDepth2 = glob.glob(inputDir + '/*/*')
     regular2Files = filter(lambda f: os.path.isfile(f) and os.path.islink(f) == False, fileDepth2);
-    
-
 
     """
     Obtain all hidden regular files
@@ -137,19 +160,29 @@ def searchRegularFile(dirs, outputDir, processName):
     """
     if(outputDir[-1] != '/'):
         outputDir = outputDir + "/"
-    #logger = MyLogger().getLogger()
     lineNum = 0
     fileHandle = open(outputDir + processName + ".txt", "w")
-    fileHandle.flush()
-    fileHandle.close()
+    #fileHandle.flush()
+    #fileHandle.close()
 
     """
     we should sleep for some time so that the os.walk can find the output file
+    No used!!!
     """
-    time.sleep(3)
-    fileHandle = open(outputDir + processName + ".txt", "a")
+    #time.sleep(3)
+    #fileHandle = open(outputDir + processName + ".txt", "a")
     for item in dirs:
         for (root, currDirs, files) in os.walk(item):
+            """
+            Firstly, we should remove symbol link dirs
+            !!!No use: since os.walk will not follow the symbol link dir by default
+            but the glob.glob will follow the symbol link
+            """
+            #for item in currDirs:
+                #fullPath = root + "/" + item
+                #if(os.path.islink(fullPath) == True):
+                    #currDirs.remove(item)
+
             for f in files:
                 filepath = os.path.join(root, f)
                 if(os.path.islink(filepath) == True):
@@ -841,6 +874,17 @@ if __name__ == "__main__":
         intermediateResultDir = intermediateResultDir + "/"
     mkdir(intermediateResultDir)
     (level1Dirs, level2Dirs) = getLevel12Dirs(dirToSearch)
+
+    """
+    Here we write the level2Dirs to file so that we can use mpi process the search the regular file
+    """
+    logger.info("Start to write level 2 dirs to file level2Dirs.txt")
+    fileHandle = open("level2Dirs.txt", "w");
+    for item in level2Dirs:
+        fileHandle.write(item + "\n");
+    fileHandle.close()
+    logger.info("End to write level 2 dirs to file level2Dirs.txt")
+
     level12RegularFiles = getLevel12RegularFiles(dirToSearch)
     logger.info("Regular files in level 1&2 directory: " + str(level12RegularFiles))
 
@@ -854,6 +898,29 @@ if __name__ == "__main__":
     logger.info("Dir groups result:")
     for item in dirGroups:
         print(item)
+
+
+    """
+    Write dir group to each file so that each mpi process can read its dir file
+    """
+    #for i in xrange(processNum):
+        #group = dirGroups[i]
+        #fname = intermediateResultDir + str(i) + ".txt"
+        #fileHandle = open(fname, "w")
+        #for item in group:
+            #fileHandle.write(item + "\n")
+        #fileHandle.close()
+
+    """
+    mpiexec -n 180 -f machinefile ./genFilePath ./tmp ./result
+    """
+    #mpiCommand = "mpiexec -f ./machinefile -n " + str(processNum) + " ./genFilePath" + " " + intermediateResultDir + " " + outputDir
+
+    #print("mpiCommand = " + mpiCommand)
+
+    #os.system(mpiCommand)
+    #exit()
+
 
     logger.info("Start to find all regular files in directory that depth is > 2")
     findAllRegularFile(dirGroups, intermediateResultDir,  fileNamePrefix, processNum) 
@@ -870,7 +937,6 @@ if __name__ == "__main__":
     outputPathFileName = outputDir + "all_file_path_result.txt"
     allPaths = mergePathFiles(intermediateResultDir, fileNamePrefix, processNum, level12RegularFiles, outputPathFileName)
     logger.info("End to merge file path files")
-
 
     """
     we append the regular files in level 1 and 2 dir to the first process file path file
