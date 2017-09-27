@@ -16,7 +16,7 @@ import multiprocessing
 import time
 import glob,os.path
 from random import shuffle
-from dir_scanner import searchRegularFile, mkdir, getCurrDateTime, getStatInfo3
+from dir_scanner import searchRegularFile, mkdir, getCurrDateTime, getStatInfo
 logger = MyLogger().getLogger()
 
 if __name__ == "__main__":
@@ -41,5 +41,5 @@ if __name__ == "__main__":
                 line = line[0:-1]
             group.append(line)
 
-    getStatInfo3(group, outputFileName, outputFileName + ".invalid", processName)
+    getStatInfo(group, outputFileName, outputFileName + ".invalid", processName)
 

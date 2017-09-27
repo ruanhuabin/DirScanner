@@ -2,7 +2,7 @@ import logging
 import logging.config
 class MyLogger(object):
     
-    def __init__(self, loggerName="customLogger", loggerLevel=logging.DEBUG):
+    def __init__(self, loggerName="customLogger", loggerLevel=logging.DEBUG, logFileName="mrc.log"):
         #self.logger = logging.getLogger(loggerName)
         #self.logger.setLevel(logging.DEBUG)
         
@@ -16,8 +16,26 @@ class MyLogger(object):
         #self.logger.addHandler(consoleHandler)
 
         
-        logging.config.fileConfig("logging.conf") 
-        self.logger = logging.getLogger(loggerName) 
+        #logging.config.fileConfig("logging.conf") 
+        #self.logger = logging.getLogger(loggerName) 
+
+        self.logger = logging.getLogger(loggerName)
+        self.logger.setLevel(loggerLevel)
+        
+        fileHandler = logging.FileHandler(logFileName)
+        fileHandler.setLevel(loggerLevel)
+
+        consoleHandler = logging.StreamHandler()
+        consoleHandler.setLevel(loggerLevel)
+
+        formatter = logging.Formatter('%(filename)s:%(funcName)s:%(lineno)d]-%(asctime)s-%(name)s-%(levelname)s: %(message)s')
+
+        fileHandler.setFormatter(formatter)
+        consoleHandler.setFormatter(formatter)
+
+        self.logger.addHandler(consoleHandler)
+        self.logger.addHandler(fileHandler)
+
         
     def getLogger(self):
         return self.logger

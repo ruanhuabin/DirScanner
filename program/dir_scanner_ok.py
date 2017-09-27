@@ -17,22 +17,7 @@ import multiprocessing
 import time
 import glob,os.path
 from random import shuffle
-
-def getCurrDateTime():
-    """
-    Get current date in specify format: YYYY-mm-dd-hh:mm:ss
-    """
-    currDate = str(datetime.now())
-    dt = currDate.split()
-    date = dt[0]
-    time = dt[1].split('.')[0]
-    currDateTime = date + '-' + time
-
-    return currDateTime
-
-logTime = getCurrDateTime()
-logFile = "scaner_(" + logTime + ").log"
-logger = MyLogger(logFileName = logFile).getLogger()
+logger = MyLogger().getLogger()
 fileHandler = logger.handlers[1]
 logFileName = fileHandler.baseFilename
 """
@@ -40,10 +25,6 @@ if old log file is exist, we trunk it into a empty log file
 """
 open(logFileName, "w")
 
-"""
-File for save directory that is not allowed accessing by root
-"""
-exceptFileHandle = open("exception.log", "a")
 def getLevel12Dirs(inputDir):
     """
     Obtain all dirs with the depth == 2, similar to use linux command find with -maxdepth to 2
@@ -173,13 +154,6 @@ def divDirsToGroups(dirs, groupNum = 1):
     return groups
 
    
-def walkErrorHandle(oserror):
-    logger.info("An Error happen")
-    fileHandle = open("exc.log", 'a')
-    traceback.print_exc(file=fileHandle)
-    fileHandle.flush()
-    fileHandle.close()
-    
 def searchRegularFile(dirs, outputDir, processName):
     """
     This function make a process called processName to search all the regular files recursively in directory in dirs
@@ -198,7 +172,7 @@ def searchRegularFile(dirs, outputDir, processName):
     #time.sleep(3)
     #fileHandle = open(outputDir + processName + ".txt", "a")
     for item in dirs:
-        for (root, currDirs, files) in os.walk(item, onerror=walkErrorHandle):
+        for (root, currDirs, files) in os.walk(item):
             """
             Firstly, we should remove symbol link dirs
             !!!No use: since os.walk will not follow the symbol link dir by default
@@ -527,7 +501,152 @@ def genFilePathList(dirFullName, pathListFullFileName, excludeDirs, logger):
     fileHandle.close()
 
 
+#input file format is like:
+# /path/to/file1
+# /path/to/file2
+def getStatInfo(filepathListFile, statResultFile, invalidResultFile,  logger):
+    logger.info("Start to get stat info")
+    lineNum = 0
+    timeFileInfo = {}
+    fileNotExist = []
+    with open(filepathListFile) as f:
+        for line in f:
+            fname = line 
+            lineNum = lineNum + 1
+            
+            #Be carefull: this check is must, otherwise the file will not be found
+            if(fname[-1] == '\n'):
+                fname = fname[0:-1]
+            if(lineNum % 10000 == 0):
+                logger.info("{0} lines have been finished processing".format(lineNum))
 
+            #We only handle the file that is really exist, some file may no longer exist when this script runs, e.g:file may be  deleted by user
+            if(os.path.isfile(fname) == True):
+                #modifyTime = os.path.getmtime(fname)
+                #accessTime = os.path.getatime(fname)
+                #changeTime = os.path.getctime(fname)
+                #modifyTime = datetime.fromtimestamp(modifyTime).strftime('%Y-%m-%d-%H:%M:%S')
+                #accessTime = datetime.fromtimestamp(accessTime).strftime('%Y-%m-%d-%H:%M:%S')
+                #changeTime = datetime.fromtimestamp(changeTime).strftime('%Y-%m-%d-%H:%M:%S')
+                #timeFileInfo[fname] = (modifyTime, accessTime, changeTime)
+                try:
+                    statInfo = os.stat(fname)
+                    modifyTime = datetime.fromtimestamp(statInfo.st_mtime).strftime('%Y-%m-%d-%H:%M:%S')
+                    accessTime = datetime.fromtimestamp(statInfo.st_atime).strftime('%Y-%m-%d-%H:%M:%S')
+                    changeTime = datetime.fromtimestamp(statInfo.st_ctime).strftime('%Y-%m-%d-%H:%M:%S')
+                    fileSize = str(statInfo.st_size)
+                    #Following two lines may raise exceptions
+                    owner = pwd.getpwuid(statInfo.st_uid)[0]
+                    group = grp.getgrgid(statInfo.st_gid)[0]
+
+                    timeFileInfo[fname] = (modifyTime, accessTime, changeTime, owner, group, fileSize)
+                except Exception as exception:
+                    logger.warn("File with exception: {0}, set it owner to {1}, grp to {2}".format(fname, "unknow_user_" + str(statInfo.st_uid), "unknow_grp_" + str(statInfo.st_gid)))
+                    logger.warn("{0}:Exception Detail: {1}".format(fname, str(exception)))
+                    traceback.print_exc(file=sys.stdout)
+                    timeFileInfo[fname] = (modifyTime, accessTime, changeTime, "unknow_user_" + str(statInfo.st_uid), "unknow_grp_" + str(statInfo.st_gid), fileSize)
+            else:
+                fileNotExist.append(fname)
+
+
+    logger.info("{0} lines have been finished processing".format(lineNum))
+
+    fileHandle = open(statResultFile, "w")
+    cnt = 0
+    logger.info("Start to write stat result info to file:{0}".format(statResultFile))
+    for(fname, values) in timeFileInfo.iteritems():
+        cnt = cnt + 1
+        lineToWrite = values[0] + "#" + values[1] + "#" + values[2] + "#" + fname + "#" + values[3] + "#" + values[4] + "#" + values[5] +  "\n"
+        fileHandle.write(lineToWrite)
+
+    logger.info("End to write stat result info to file:{0}".format(statResultFile))
+    fileHandle.close()
+
+    fileHandle = open(invalidResultFile, "w")
+    logger.info("start to write invalid result info to file:{0}".format(invalidResultFile))
+    for f in fileNotExist:
+        fileHandle.write("{0}\n".format(f))
+
+    logger.info("End to write stat result info to file:{0}".format(invalidResultFile))
+
+    return (timeFileInfo, fileNotExist)
+
+def getStatInfo2(filepathListFile, statResultFile, invalidResultFile):
+
+    #logger = MyLogger().getLogger()
+    logger.info("Start to get stat info in function getStatInfo()")
+    lineNum = 0
+    timeFileInfo = {}
+    fileNotExist = []
+    with open(filepathListFile) as f:
+        for line in f:
+            fname = line 
+            lineNum = lineNum + 1
+            
+            #Be carefull: this check is must, otherwise the file will not be found
+            if(fname[-1] == '\n'):
+                fname = fname[0:-1]
+            if(lineNum % 10000 == 0):
+                logger.info("{0} lines have been finished processing".format(lineNum))
+
+            #We only handle the file that is really exist, some file may no longer exist when this script runs, e.g:file may be  deleted by user
+            if(os.path.isfile(fname) == True):
+                try:
+                    statInfo = os.stat(fname)
+                    modifyTime = datetime.fromtimestamp(statInfo.st_mtime).strftime('%Y-%m-%d-%H:%M:%S')
+                    accessTime = datetime.fromtimestamp(statInfo.st_atime).strftime('%Y-%m-%d-%H:%M:%S')
+                    changeTime = datetime.fromtimestamp(statInfo.st_ctime).strftime('%Y-%m-%d-%H:%M:%S')
+                    fileSize = str(statInfo.st_size)
+                    #Following two lines may raise exceptions
+                    owner = pwd.getpwuid(statInfo.st_uid)[0]
+                    group = grp.getgrgid(statInfo.st_gid)[0]
+
+                    timeFileInfo[fname] = (modifyTime, accessTime, changeTime, owner, group, fileSize)
+                except Exception as exception:
+                    logger.info("File with exception: {0}, set it owner to {1}, grp to {2}".format(fname, "unknow_user_" + str(statInfo.st_uid), "unknow_grp_" + str(statInfo.st_gid)))
+                    logger.warn("{0}:Exception Detail: {1}".format(fname, str(exception)))
+                    traceback.print_exc(file=sys.stdout)
+                    timeFileInfo[fname] = (modifyTime, accessTime, changeTime, "unknow_user_" + str(statInfo.st_uid), "unknow_grp_" + str(statInfo.st_gid), fileSize)
+            else:
+                fileNotExist.append(fname)
+
+
+    logger.info("{0} lines have been finished processing".format(lineNum))
+
+
+    fileHandle = open(statResultFile, "w")
+    
+    cnt = 0
+    logger.info("Start to write stat result info to file:{0}".format(statResultFile))
+    for(fname, values) in timeFileInfo.iteritems():
+        cnt = cnt + 1
+        lineToWrite = values[0] + "#" + values[1] + "#" + values[2] + "#" + fname + "#" + values[3] + "#" + values[4] + "#" + values[5] +  "\n"
+        fileHandle.write(lineToWrite)
+
+    logger.info("End to write stat result info to file:{0}".format(statResultFile))
+    fileHandle.close()
+
+    fileHandle = open(invalidResultFile, "w")
+    logger.info("start to write invalid result info to file:{0}".format(invalidResultFile))
+    for f in fileNotExist:
+        fileHandle.write("{0}\n".format(f))
+
+    logger.info("End to write stat result info to file:{0}".format(invalidResultFile))
+
+    return (timeFileInfo, fileNotExist)
+
+
+def getCurrDateTime():
+    """
+    Get current date in specify format: YYYY-mm-dd-hh:mm:ss
+    """
+    currDate = str(datetime.now())
+    dt = currDate.split()
+    date = dt[0]
+    time = dt[1].split('.')[0]
+    currDateTime = date + '-' + time
+
+    return currDateTime
 
 def findAllRegularFile(dirGroups, outputDir, fileNamePrefix, processNum = 1):
 
@@ -544,16 +663,29 @@ def findAllRegularFile(dirGroups, outputDir, fileNamePrefix, processNum = 1):
         #print cnt, ":",  res.get()
         #cnt = cnt + 1
 
-"""
-This function will be run by each process
-"""
-def getStatInfo(pathGroup, statResultFile, invalidResultFile, processName):
+def statAllRegularFile(pathFiles, outputDir, fileNamePrefix, processNum = 1):
 
+    pool = multiprocessing.Pool(processes=processNum)
+    result = []
+    for i in xrange(processNum):
+        processName = (fileNamePrefix + "_%d") %(i)
+        outputStatFile = outputDir + fileNamePrefix + "_{0}".format(i) + "_stat.txt"
+        invalidStatFileName = outputDir + fileNamePrefix + "_{0}".format(i) + "_stat_invalid.txt"
+        result.append(pool.apply_async(getStatInfo2, (pathFiles[i], outputStatFile, invalidStatFileName)))
+    pool.close()
+    pool.join()
+
+
+
+def getStatInfo3(pathGroup, statResultFile, invalidResultFile, processName):
+
+    #logger = MyLogger().getLogger()
     logger.info("{0}: Start to get file stat info".format(processName))
     lineNum = 0
     timeFileInfo = {}
     fileNotExist = []
-
+    #with open(filepathListFile) as f:
+    #for line in f:
     for fname in pathGroup:
         lineNum = lineNum + 1
         
@@ -611,7 +743,7 @@ def getStatInfo(pathGroup, statResultFile, invalidResultFile, processName):
     return (timeFileInfo, fileNotExist)
 
 
-def statAllRegularFile(pathGroups, outputDir, fileNamePrefix, processNum = 1):
+def statAllRegularFile3(pathGroups, outputDir, fileNamePrefix, processNum = 1):
 
     pool = multiprocessing.Pool(processes=processNum)
     result = []
@@ -620,13 +752,14 @@ def statAllRegularFile(pathGroups, outputDir, fileNamePrefix, processNum = 1):
         #outputStatFile = outputDir + fileNamePrefix + "_{0}".format(i) + "_stat.txt"
         outputStatFile = outputDir + "stat_{0}".format(i) + ".txt"
         invalidStatFileName = outputDir + fileNamePrefix + "_{0}".format(i) + "_stat_invalid.txt"
-        result.append(pool.apply_async(getStatInfo, (pathGroups[i], outputStatFile, invalidStatFileName, fileNamePrefix + "_{0}".format(i))))
+        result.append(pool.apply_async(getStatInfo3, (pathGroups[i], outputStatFile, invalidStatFileName, fileNamePrefix + "_{0}".format(i))))
     pool.close()
     pool.join()
 
 def mergePathFiles(outputDir, fileNamePrefix, processNum, level12RegularFiles, outputFilePathName):
 
     allPaths = []
+
     for item in level12RegularFiles:
         allPaths.append(item)
 
@@ -652,11 +785,12 @@ def mergePathFiles(outputDir, fileNamePrefix, processNum, level12RegularFiles, o
     return allPaths
 
 
-def mergeStatFiles(statFileDir, fileNamePrefix,  processNum, statFileName):
+def mergeStatFiles(outputDir, fileNamePrefix,  processNum, statFileName):
+
 
     allStatInfo = []
     for i in xrange(0, processNum):
-        fileName = statFileDir + fileNamePrefix + "_{0}".format(i) + ".txt"
+        fileName = outputDir + fileNamePrefix + "_{0}".format(i) + ".txt"
         with open(fileName) as f:
             for line in f:
                 allStatInfo.append(line)
@@ -714,13 +848,10 @@ def genFileSizeRangeDict(classifySize=500, classifyNum=5):
        """
        pathList = []
        typeList = []
-       userList = []
-       userGrpList = []
        low = "%5d"%(i * classifySize)
        high = "%5d"%(i * classifySize + classifySize)
        key = str(low) + "~~" + str(high)
-       rangeDict[key] = [0,0,typeList,pathList,userList, userGrpList]
-       #rangeDict[key] = [0,0,typeList,pathList]
+       rangeDict[key] = [0,0,typeList,pathList]
 
    key = "%5d"%((classifyNum - 1) * classifySize)
    key = str(key) + "+"
@@ -729,10 +860,7 @@ def genFileSizeRangeDict(classifySize=500, classifyNum=5):
    """
    lastTypeList = []
    lastPathList = []
-   lastUserList = []
-   lastUserGrpList = []
-   rangeDict[key] = [0,0,lastTypeList,lastPathList, lastUserList, lastUserGrpList]
-   #rangeDict[key] = [0,0,lastTypeList,lastPathList]
+   rangeDict[key] = [0,0,lastTypeList,lastPathList]
    return rangeDict
 
 def getRangeKey(rangeKeysList, fileSize, classifySize):
@@ -749,17 +877,14 @@ def getRangeKey(rangeKeysList, fileSize, classifySize):
         return rangeKeysList[-1]
 
 
-def getTypeCnt(pathListInfo):
+def getTypeCnt(pathList):
     """
     Get type 2 count info in path list
     """
     typeCntDict = {}
-    lineNum = 0
-    for item in pathListInfo:
-        fname = item[0]
+    for fname in pathList:
         if(fname[-1] == "\n"):
             fname = fname[0:-1]
-
 
         (name, ext) = os.path.splitext(fname)
         if(len(ext) == 0):
@@ -772,12 +897,7 @@ def getTypeCnt(pathListInfo):
             typeCntDict[ext] = typeCntDict[ext] + 1
         else:
             typeCntDict[ext] = 1
-
-        lineNum = lineNum + 1
-        if(lineNum % 100000 == 0):
-            logger.info("{0} lines finish processing".format(lineNum))
     
-    logger.info("{0} lines finish processing".format(lineNum))
 
     """
     Organize info like type->cnt
@@ -792,70 +912,6 @@ def getTypeCnt(pathListInfo):
 
 
 
-
-def getUserCntSize(pathListInfo):
-    userCntSizeList = []
-
-    userCntSizeDict = {}
-
-    lineNum = 0
-    for item in pathListInfo:
-        fileSize = item[1]
-        userName = item[2]
-        userGrpName = item[3]
-
-        if(userCntSizeDict.has_key(userName) == True):
-            userCntSizeDict[userName][0] = userCntSizeDict[userName][0] + fileSize
-            userCntSizeDict[userName][1] = userCntSizeDict[userName][1] + 1
-        else:
-            userCntSizeDict[userName] = [fileSize, 1]
-
-        lineNum = lineNum + 1
-        if(lineNum % 100000 == 0):
-            logger.info("{0} lines finish processing".format(lineNum))
-
-    logger.info("{0} lines finish processing".format(lineNum))
-    for(k, v) in userCntSizeDict.iteritems():
-        userCntSizeList.append((k, v[1], v[0]))
-    
-    userCntSizeListSorted = sorted(userCntSizeList, key=lambda x: x[2], reverse = True)
-    userCntSizeListFinal = []
-
-    for item in userCntSizeListSorted:
-        userCntSizeListFinal.append((item[0], item[1], sizeof_fmt(item[2])))
-
-    return userCntSizeListFinal
-
-def getUserGrpCntSize(pathListInfo):
-    userGrpCntSizeList = []
-    userGrpCntSizeDict = {}
-    lineNum = 0
-    for item in pathListInfo:
-        fileSize = item[1]
-        userName = item[2]
-        userGrpName = item[3]
-
-        if(userGrpCntSizeDict.has_key(userGrpName) == True):
-            userGrpCntSizeDict[userGrpName][0] = userGrpCntSizeDict[userGrpName][0] + fileSize
-            userGrpCntSizeDict[userGrpName][1] = userGrpCntSizeDict[userGrpName][1] + 1
-        else:
-            userGrpCntSizeDict[userGrpName] = [fileSize, 1]
-        lineNum = lineNum + 1
-        if(lineNum % 100000 == 0):
-            logger.info("{0} lines finish processing".format(lineNum))
-
-
-    logger.info("{0} lines finish processing".format(lineNum))
-    for(k, v) in userGrpCntSizeDict.iteritems():
-        userGrpCntSizeList.append((k, v[1], v[0]))
-
-    userGrpCntSizeListSorted = sorted(userGrpCntSizeList, key=lambda x: x[2], reverse = True)
-    userGrpCntSizeListFinal = []
-
-    for item in userGrpCntSizeListSorted:
-        userGrpCntSizeListFinal.append((item[0], item[1], sizeof_fmt(item[2])))
-
-    return userGrpCntSizeListFinal
 
 
 def genFileSizeRangeDistribution(statInfoFile, classifySize=500, classifyNum=5, outputDir="./"):
@@ -872,22 +928,20 @@ def genFileSizeRangeDistribution(statInfoFile, classifySize=500, classifyNum=5, 
             fileLastAccessTime = items[1]
             fname = items[3]
             fileSize = items[-1]
-            userGrpName = items[-2]
-            userName = items[-3]
             if(fileSize[-1] == '\n'):
                 fileSize = fileSize[:-1]
             
             fileSize = int(fileSize)
             fileTotalSize = fileTotalSize + fileSize
-            #(name, ext) = os.path.splitext(fname)
+            (name, ext) = os.path.splitext(fname)
             
-            #if(len(ext) > 0 and ext[-1] == '\n'):
-                #ext = ext[:-1]
+            if(len(ext) > 0 and ext[-1] == '\n'):
+                ext = ext[:-1]
 
             rangeKey = getRangeKey(rangeKeys, fileSize, classifySize)
             fileSizeRangeDict[rangeKey][0] = fileSizeRangeDict[rangeKey][0] + fileSize
             fileSizeRangeDict[rangeKey][1] = fileSizeRangeDict[rangeKey][1] + 1
-            fileSizeRangeDict[rangeKey][3].append((fname, fileSize, userName, userGrpName))
+            fileSizeRangeDict[rangeKey][3].append(fname)
             if(lineNum % 10000 == 0):
                 logger.info("{0} lines finisned processing".format(lineNum))
             
@@ -896,8 +950,6 @@ def genFileSizeRangeDistribution(statInfoFile, classifySize=500, classifyNum=5, 
     for rangeKey in rangeKeys:
         fileSizeRangeDict[rangeKey][0] = sizeof_fmt(fileSizeRangeDict[rangeKey][0]) 
         fileSizeRangeDict[rangeKey][2] = getTypeCnt(fileSizeRangeDict[rangeKey][3])
-        fileSizeRangeDict[rangeKey][4] = getUserCntSize(fileSizeRangeDict[rangeKey][3])
-        fileSizeRangeDict[rangeKey][5] = getUserGrpCntSize(fileSizeRangeDict[rangeKey][3])
 
     """
     Output rangeDict result to file
@@ -910,19 +962,12 @@ def genFileSizeRangeDistribution(statInfoFile, classifySize=500, classifyNum=5, 
         fileHandle = open(outputFilename, "w")
         fileHandle.write("Total Size: " + str(value[0]) + "\n")
         fileHandle.write("Total File Num: " + str(value[1]) + "\n")
-        fileHandle.write("---------------------User 2 Cnt Num-----------------\n")
-        for item in value[4]:
-            fileHandle.write("{0}  #  {1}  #  {2}\n".format(item[0], item[1], item[2]))
-        fileHandle.write("---------------------Grp 2 Cnt Num-----------------\n")
-        for item in value[5]:
-            fileHandle.write("{0}  #  {1}  #  {2}\n".format(item[0], item[1], item[2]))
         fileHandle.write("---------------------Type 2 Num-----------------\n")
         for item in value[2]:
             fileHandle.write(item + "\n")
         fileHandle.write("---------------------File List------------------\n")
         for item in value[3]:
-            filePath = item[0]
-            fileHandle.write(filePath + "\n")
+            fileHandle.write(item + "\n")
         fileHandle.close()
 
     return fileSizeRangeDict
@@ -933,18 +978,18 @@ if __name__ == "__main__":
     baseTime = getCurrDateTime()
     parser = argparse.ArgumentParser(description="This program is used to scan all regular file in a dirctory and make some statistic operations")
     parser.add_argument("-i", "--dir_to_search", action="store", help="The directory to search", required=False)
-    parser.add_argument("-s", "--stat_file_name", action="store", help="Name of the linux stat command result file, default[all_stat_result.txt]", default="all_stat_result.txt")
-    parser.add_argument("-d", "--output_dir", action="store", help="The directory to save the output result file, default[/tmp/]", default="/tmp/")
-    parser.add_argument("-m", "--tmp_dir", action="store", help="The tmpory directory for saving intermediat result file,default[./tmp/]", default="./tmp/")
-    parser.add_argument("-p", "--filename_prefix", action="store", help="The prefix string for the file path file name, default[file_path]", default="file_path")
-    parser.add_argument("-t", "--base_time", action="store", help="The datetime to compare with the last access time, format is: yyyy-mm-dd-hh:mm:ss, default is system current time",default=baseTime) 
-    parser.add_argument("-n", "--process_num", action="store", type=int, help="The process number to run, default is 8", default=8)
-    parser.add_argument("-r", "--is_shuffle", action="store", type=int, help="Whether to shuffle the dirs depth that >= 2 so as to make a possible blance for  process loading ,default is 0 indicating not to shuffle ", choices=[0,1], default=0)
-    parser.add_argument("-e", "--exclude_dirs", action="append", help="The directories that do not need to be searched, default is []", default=[])
-    parser.add_argument("-o", "--operation", action="store", help="operation to execute", choices=['all', 'gen_file_distribution'], default='all')
-    parser.add_argument("-c", "--classify_size", action="store", type=int, help="Size in MB used to classify the result stat info, default is 1024MB", default=1024)
-    parser.add_argument("-g", "--classify_num", action="store", type=int, help="Num of classes to generate, default is to generate 2 classes", default=2)
-    parser.add_argument("-x", "--is_used_mpi", action="store", type=int, help="Num of classify to generate, default is 0 indicating not to use MPI", choices=[0,1], default=0)
+    parser.add_argument("-s", "--stat_file_name", action="store", help="Name of the linux stat command result file", default="all_stat_result.txt")
+    parser.add_argument("-d", "--output_dir", action="store", help="The directory to save the output result file", default="/tmp/")
+    parser.add_argument("-m", "--tmp_dir", action="store", help="The tmpory directory for saving intermediat result file", default="./tmp/")
+    parser.add_argument("-p", "--filename_prefix", action="store", help="The prefix string for the file path file name", default="file_path")
+    parser.add_argument("-t", "--base_time", action="store", help="The datetime to compare with the last access time, format is: yyyy-mm-dd-hh:mm:ss",default=baseTime) 
+    parser.add_argument("-n", "--process_num", action="store", type=int, help="The process number to run", default=8)
+    parser.add_argument("-r", "--is_shuffle", action="store", type=int, help="Whether to shuffle the dirs depth that >= 2 so as to blance the process load ", default=0)
+    parser.add_argument("-e", "--exclude_dirs", action="append", help="The directories that do not need to be searched", default=[])
+    parser.add_argument("-o", "--operation", action="store", help="operation to execute", choices=['all', 'gen_file_path_only','gen_stat_file','gen_type_typeperiod_2_num_size', 'gen_user_grp_2_num_size'], default='all')
+    parser.add_argument("-c", "--classify_size", action="store", type=int, help="Size in MB used to classify the result stat info", default=500)
+    parser.add_argument("-g", "--classify_num", action="store", type=int, help="Num of classify to generate", default=5)
+    parser.add_argument("-x", "--is_used_mpi", action="store", type=int, help="Num of classify to generate", default=0)
     args = parser.parse_args()
     logger.info("directory to search:" + str(args.dir_to_search))
     logger.info("output dir is: " + args.output_dir)
@@ -973,15 +1018,6 @@ if __name__ == "__main__":
     if(intermediateResultDir[-1] != '/'):
         intermediateResultDir = intermediateResultDir + "/"
     mkdir(intermediateResultDir)
-
-    
-    if(op == "gen_file_distribution"):
-        statFileName = args.stat_file_name;
-        logger.info("Start to gen file distribution by stat file: {0}".format(statFileName))
-        genFileSizeRangeDistribution(statFileName, 1024, 2, outputDir)
-        logger.info("End to gen file distribution")
-        exit()
-
     (level1Dirs, level2Dirs) = getLevel12Dirs(dirToSearch)
 
     """
@@ -1063,7 +1099,12 @@ if __name__ == "__main__":
 
     logger.info("Sleep 3 seconds and then to stat file ")
     time.sleep(3)
+    #pathFiles = []
+    #for i in xrange(0, processNum):
+    #    pathFile = intermediateResultDir + fileNamePrefix + "_{0}".format(i) + ".txt"
+    #    pathFiles.append(pathFile)
 
+    #statAllRegularFile(pathFiles, intermediateResultDir, fileNamePrefix, processNum)
     pathGroups = divAllPathsToGroups(allPaths, processNum)
 
     if(isUsedMPI == 1):
@@ -1094,7 +1135,7 @@ if __name__ == "__main__":
         """
         os.system(mpiCommandStatFilePath)
     else:
-        statAllRegularFile(pathGroups, intermediateResultDir, fileNamePrefix, processNum)
+        statAllRegularFile3(pathGroups, intermediateResultDir, fileNamePrefix, processNum)
 
     outputStatFileName = outputDir + args.stat_file_name 
     mergeStatFiles(intermediateResultDir, "stat", processNum, outputStatFileName)
@@ -1116,4 +1157,3 @@ if __name__ == "__main__":
     genFileSizeRangeDistribution(outputStatFileName, classifySize, classifyNum, outputDir)
     logger.info("End to gen file size distribution info")
 
-    exceptFileHandle.close()
