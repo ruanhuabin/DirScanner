@@ -59,7 +59,8 @@ def divGroups(inputFile, outputFile, processNum):
             if(line[-1] == '\n'):
                 line = line[0:-1]
 
-            (dirPath, fileNum) = line.split()
+            #(dirPath, fileNum) = line.split()
+            (fileNum, dirPath) = line.split(None, 1)
             dir2FileNumList.append((dirPath, fileNum))
 
             
