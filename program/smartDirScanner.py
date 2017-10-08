@@ -44,11 +44,11 @@ open(logFileName, "w")
 File for save directory that is not allowed accessing by root
 """
 exceptFileHandle = open("exception.log", "a")
+
 def getLevel12Dirs(inputDir):
     """
     Obtain all dirs with the depth == 2, similar to use linux command find with -maxdepth to 2
     """
-
     if(inputDir[-1] != '/'):
         inputDir = inputDir + '/'
 
@@ -96,13 +96,12 @@ def getLevel12Dirs(inputDir):
         if(dirName not in symbolLinkDirs):
             dirsDepth2Final.append(item)
 
-
     return (dirsDepth1Final, dirsDepth2Final)
 
 
 def getLevel12RegularFiles(inputDir):
     """
-    Obtain all regular files with the depth == 1, similar to use linux command find with -maxdepth to 2
+    Obtain all regular files with the depth == 1 or == 2, similar to use linux command find with -maxdepth to 2
     """
 
     if(inputDir[-1] != '/'):
@@ -145,9 +144,6 @@ def divDirsToGroups(dirs, groupNum = 1):
     """
     Divide all dir in dirs into groupNum groups 
     """
-    #logger = MyLogger().getLogger()
-    
-
     groups = []
     for i in xrange(0, groupNum):
         groups.append([])
@@ -160,7 +156,7 @@ def divDirsToGroups(dirs, groupNum = 1):
         else:
             groupSize = totalDirsNum / groupNum + 1
 
-    logger.info("Group size is: {0}".format(groupSize))
+    logger.debug("Group size is: {0}".format(groupSize))
 
     j = 0
     for i in xrange(0, totalDirsNum):
@@ -188,15 +184,10 @@ def searchRegularFile(dirs, outputDir, processName):
         outputDir = outputDir + "/"
     lineNum = 0
     fileHandle = open(outputDir + processName + ".txt", "w")
-    #fileHandle.flush()
-    #fileHandle.close()
 
-    """
-    we should sleep for some time so that the os.walk can find the output file
-    No used!!!
-    """
-    #time.sleep(3)
-    #fileHandle = open(outputDir + processName + ".txt", "a")
+
+
+    symbolLinkFileNum = 0
     for item in dirs:
         for (root, currDirs, files) in os.walk(item, onerror=walkErrorHandle):
             """
@@ -208,29 +199,27 @@ def searchRegularFile(dirs, outputDir, processName):
                 #fullPath = root + "/" + item
                 #if(os.path.islink(fullPath) == True):
                     #currDirs.remove(item)
-
+            
             for f in files:
                 filepath = os.path.join(root, f)
                 if(os.path.islink(filepath) == True):
-                    logger.warn("{0}: {1} is a symbol link, ignored".format(processName, filepath))
+                    symbolLinkFileNum = symbolLinkFileNum + 1
+                    if(symbolLinkFileNum % 1000 == 0):
+                        logger.warn("{0}: {1} symbol link files found, current last one is: {2}".format(processName, symbolLinkFileNum, filepath))
                     continue
                 try:
                     fileHandle.write("{0}\n".format(filepath))
                     lineNum = lineNum + 1
                     fileHandle.flush()
                 except Exception as exception:
-                    logger.error("File with exception: {0}:{1}".format(filepath, str(exception)))
+                    logger.error("File writing exception: {0}:{1}".format(filepath, str(exception)))
                     traceback.print_exc(file=sys.stdout)
 
-                if(lineNum % 10000 == 0):
+                if(lineNum % 100000 == 0):
                     logger.info("{0}: {1} files have been found".format(processName, lineNum))
 
     fileHandle.close()
-
     logger.info("Process: {0} has finished searching directory: {1}".format(processName, str(dirs)))
-   # return "done by process: " + processName
-
-
 
 def mkdir(path):
     try:
@@ -314,21 +303,24 @@ def calculate_time_gap(ftGapDetail):
             else:
                 tmGapPeriod[newKey] =  (1, fileSize)
                 
-            
-    
-    #(key, value) in ftGapNew is like:{"[file extention]"==>[(dayGap, "this file size"), (dayGap, "this file size")], .....}
-    #(key value) in tmpGapPeriod is like: {".mrc(090-120)" ==> (120, 55555)}, means that there 120 files that were accessed in 90~120 days, these files total size is 55555 bytes 
+    """
+    (key, value) in ftGapNew is like:{"[file extention]"==>[(dayGap, "this file size"), (dayGap, "this file size")], .....}
+    (key value) in tmpGapPeriod is like: {".mrc(090-120)" ==> (120, 55555)}, means that there 120 files that were accessed in 90~120 days, these files total size is 55555 bytes 
+    """
     return (ftGapNew, tmGapPeriod)
             
             
-#Calculate each file's time gap between last access time and baseTime, here baseTime is specify by user.
-#Also generate each file type's total number and corresponding type
-#item format in inputFileName is like: [modifyTime]#[accessTime]#[changeTime]#[filepath]#owner#group#filesize       
 def genTypeTypePeriod2NumSize(inputFileName, outputTypeTimePeriod2FileSizeFileName, outputType2FileSizeFileName, baseTime):
-    #logger = MyLogger().getLogger()
+    """
+    Calculate each file's time gap between last access time and baseTime, here baseTime is specify by user.
+    Also generate each file type's total number and corresponding type
+    item format in inputFileName is like: [modifyTime]#[accessTime]#[changeTime]#[filepath]#owner#group#filesize       
+    """
     lineNum = 0    
     fileTotalSize = 0
-    #(key, value) in ftGapDetail is like("suffix of file, like .mrc", ["time gap result like "xxx days, hh:mm:ss"])
+    """
+    (key, value) in ftGapDetail is like("suffix of file, like .mrc", ["time gap result like "xxx days, hh:mm:ss"])
+    """
     ftGapDetail = {}
     with open(inputFileName) as f:
         for line in f: 
@@ -365,52 +357,40 @@ def genTypeTypePeriod2NumSize(inputFileName, outputTypeTimePeriod2FileSizeFileNa
     
     tmGapPeriodList = tmGapPeriod.iteritems()
     sortedGapPeriodList = sorted(tmGapPeriodList, key=lambda x:x[0], reverse = True)
-    #for(k,v) in tmGapPeriod.iteritems():
     
     f = open(outputTypeTimePeriod2FileSizeFileName, "w")
-    logger.info("Start to write typetimeperiod -> file size info in file: {0}".format(outputTypeTimePeriod2FileSizeFileName))
     for item in sortedGapPeriodList:
-        #print("{0} ----> {1}---->{2}".format(item[0], item[1][0], sizeof_fmt(item[1][1])))
         f.write("{0}#{1}#{2}\n".format(item[0], item[1][0], sizeof_fmt(item[1][1])))
     
     f.write("Total File Size: {0}\n".format(sizeof_fmt(fileTotalSize)))
-
     f.close()
 
-    logger.info("End to write typetimeperiod  -> file size info in file: {0}".format(outputTypeTimePeriod2FileSizeFileName))
-    #print("-----------------------------------------------\n")
     
     f = open(outputType2FileSizeFileName, "w")
-    #Sort by the length of second element in item, second element in each item is a list of day gap info 
-    #sortedFTGapNew = sorted(ftGapNew.iteritems(), key=lambda x:len(x[1]), reverse = True)
-    #print("ftGapNew = {0}".format(ftGapNew))
-  
     unSortedFTGapNew = []
     for (k, v) in ftGapNew.iteritems():
         item = (k, len(v), sum(vv[1] for vv in v))
         unSortedFTGapNew.append(item)
     
-    #print("unSortedFTGapNew = {0}".format(unSortedFTGapNew))    
     sortedFTGapNew = sorted(unSortedFTGapNew, key = lambda x: x[2], reverse = True)
-  
      
-    logger.info("Start to write type -> file size info in file: {0}".format(outputType2FileSizeFileName))
     for item in sortedFTGapNew:
-       #print("{0} ----> {1}--->{2}".format(item[0], item[1], sizeof_fmt(item[2])))
         f.write("{0}#{1}#{2}\n".format(item[0], item[1], sizeof_fmt(item[2])))
 
     f.write("Total File Size: {0}\n".format(sizeof_fmt(fileTotalSize)))
     f.close()
-    logger.info("End to write type -> file size info in file: {0}".format(outputType2FileSizeFileName))
 
 
-#Analysis how many space each user and each group used
 def gen_user_grp_usage(filename, outputUser2UsedSizeFile, outputGrp2UsedSizeFile, outputGrp2UsersFile):
-    #logger = MyLogger().getLogger()
+    """
+    Analysis how many space each user and each group used
+    """
     lineNum = 0    
     fileTotalSize = 0
     
-    #(key, value) format is like: ("grpname", "{("username1"), ("number of files", "bytes used")} ")
+    """
+    (key, value) format is like: ("grpname", "{("username1"), ("number of files", "bytes used")} ")
+    """
     grpUserUsage = {}
     userUsage = {}
     userGrp = {}
@@ -441,7 +421,7 @@ def gen_user_grp_usage(filename, outputUser2UsedSizeFile, outputGrp2UsedSizeFile
                 userUsage[username] = (1, fileSize)
             
             if(lineNum % 100000 == 0):
-                logger.info("{0} lines have been finished processing".format(lineNum))
+                logger.info("{0} lines finish processing".format(lineNum))
     
     for (username, usage) in userUsage.iteritems():
         #add user info to grp            
@@ -456,78 +436,32 @@ def gen_user_grp_usage(filename, outputUser2UsedSizeFile, outputGrp2UsedSizeFile
         else:
             grpUser[grp] = [username]
         
-    logger.info("{0} lines have been finished processing".format(lineNum))
+    logger.info("{0} lines finish processing".format(lineNum))
     fileHandle = open(outputUser2UsedSizeFile, "w")
     sortedUserUsage = sorted(userUsage.iteritems(), key = lambda x: x[1][1], reverse=True)   
-    logger.info("Start to write user space usage info to file {0}".format(outputUser2UsedSizeFile))
     for item in sortedUserUsage:
-        logger.info("UserName = {0}, FileCnt = {1}, TotalSize = {2}".format(item[0], item[1][0], sizeof_fmt(item[1][1])))
         fileHandle.write("{0}#{1}#{2}\n".format(item[0], item[1][0], sizeof_fmt(item[1][1])))
     fileHandle.close()
-    
-    logger.info("End to write user space usage info to file {0}".format(outputUser2UsedSizeFile))
     
     grpUserUsageList = []
     fileHandle = open(outputGrp2UsedSizeFile, "w")
     for (k, v) in grpUserUsage.iteritems():
-        #logger.info("grpName = {0}, user num = {1}, user usage = {2}, total spaced used = {3}".format(k, len(v), v, sizeof_fmt(sum(vv[2] for vv in v))))
         item = (k, len(v), sum(vv[2] for vv in v))
         grpUserUsageList.append(item)
-        #fileHandle.write("{0}#{1}#{2}\n".format(k, len(v), sizeof_fmt(sum(vv[2] for vv in v))))
     
     sortedGrpUserUsage = sorted(grpUserUsageList, key=lambda x: x[2], reverse = True)
-    #print("sortedGrpUserUsage = {0}".format(sortedGrpUserUsage))    
 
-    logger.info("Start to write group space usage info to file {0}".format(outputGrp2UsedSizeFile))
     for item in sortedGrpUserUsage:
-        #logger.info("grpName = {0}, user num = {1}, total spaced used = {2}".format(item[0], item[1], sizeof_fmt(item[2])))
         fileHandle.write("{0}#{1}#{2}\n".format(item[0], item[1], sizeof_fmt(item[2])))
         
     fileHandle.close()
-    logger.info("End to write group space usage info to file {0}".format(outputGrp2UsedSizeFile))
     
     fileHandle = open(outputGrp2UsersFile, "w")
     sortedGrpUser = sorted(grpUser.iteritems(), key=lambda x: x[0])
-    logger.info("Start to write group to users info to file {0}".format(outputGrp2UsersFile))
     for item in sortedGrpUser:
-        #logger.info("{0} ---> {1}".format(item[0], item[1]))
         fileHandle.write(str(item) + "\n")
     
     fileHandle.close()
-    logger.info("End to write group to users info to file {0}".format(outputGrp2UsersFile))
-
-#Find all regular file in specify dir "dirFullName", and save the result to file "pathListFullFileName"
-#Output file format is like:
-# /path/to/file1
-# /path/to/file2
-def genFilePathList(dirFullName, pathListFullFileName, excludeDirs, logger):
-
-    if(dirFullName[-1] != '/'):
-        dirFullName = dirFullName + "/"
-    lineNum = 0
-    fileHandle = open(pathListFullFileName, "w")
-    for (root, dirs, files) in os.walk(dirFullName):
-        for item in excludeDirs:
-            (parent, dirname) = os.path.split(item)
-            if(root[:-1] == parent and dirname in dirs):
-                dirs.remove(dirname)
-        logger.info("Find regular file in directory: {0}".format(root))
-        for f in files:
-            filepath = os.path.join(root, f)
-            if(os.path.islink(filepath) == True):
-                logger.warn("{0} is a symbol link, ignored".format(filepath))
-                continue
-            #logger.info("f = {0}".format(filepath))
-            fileHandle.write("{0}\n".format(filepath))
-            lineNum = lineNum + 1
-            if(lineNum % 10000 == 0):
-                logger.info("{0} regular files have been found".format(lineNum))
-
-    logger.info("{0} regular files have been found".format(lineNum))
-    fileHandle.close()
-
-
-
 
 def findAllRegularFile(dirGroups, outputDir, fileNamePrefix, processNum = 1):
 
@@ -544,26 +478,25 @@ def findAllRegularFile(dirGroups, outputDir, fileNamePrefix, processNum = 1):
         #print cnt, ":",  res.get()
         #cnt = cnt + 1
 
-"""
-This function will be run by each process
-"""
 def getStatInfo(pathGroup, statResultFile, invalidResultFile, processName):
-
-    logger.info("{0}: Start to get file stat info".format(processName))
+    """
+    This function will be run by each process
+    """
     lineNum = 0
     timeFileInfo = {}
     fileNotExist = []
 
     for fname in pathGroup:
         lineNum = lineNum + 1
-        
         #Be carefull: this check is must, otherwise the file will not be found
         if(fname[-1] == '\n'):
             fname = fname[0:-1]
         if(lineNum % 10000 == 0):
-            logger.info("{0}: {1} lines have been finished processing".format(processName, lineNum))
+            logger.info("{0}: {1} lines finish processing".format(processName, lineNum))
 
-        #We only handle the file that is really exist, some file may no longer exist when this script runs, e.g:file may be  deleted by user
+        """
+        We only handle the file that is really exist, some file may no longer exist when this script runs, e.g:file may be  deleted by user
+        """
         if(os.path.isfile(fname) == True):
             try:
                 statInfo = os.stat(fname)
@@ -586,7 +519,7 @@ def getStatInfo(pathGroup, statResultFile, invalidResultFile, processName):
             fileNotExist.append(fname)
 
 
-    logger.info("{0}:{1} lines have been finished processing".format(processName, lineNum))
+    logger.info("{0}:{1} lines finish processing".format(processName, lineNum))
 
 
     fileHandle = open(statResultFile, "w")
@@ -597,7 +530,6 @@ def getStatInfo(pathGroup, statResultFile, invalidResultFile, processName):
         cnt = cnt + 1
         lineToWrite = values[0] + "#" + values[1] + "#" + values[2] + "#" + fname + "#" + values[3] + "#" + values[4] + "#" + values[5] +  "\n"
         fileHandle.write(lineToWrite)
-
     logger.info("{0}: End to write stat result info to file:{1}".format(processName, statResultFile))
     fileHandle.close()
 
@@ -605,9 +537,8 @@ def getStatInfo(pathGroup, statResultFile, invalidResultFile, processName):
     logger.info("{0}: start to write invalid result info to file:{1}".format(processName, invalidResultFile))
     for f in fileNotExist:
         fileHandle.write("{0}\n".format(f))
-
+    fileHandle.close()
     logger.info("{0}: End to write stat result info to file:{1}".format(processName, invalidResultFile))
-
     return (timeFileInfo, fileNotExist)
 
 
@@ -617,7 +548,6 @@ def statAllRegularFile(pathGroups, outputDir, fileNamePrefix, processNum = 1):
     result = []
     for i in xrange(processNum):
         processName = (fileNamePrefix + "_%d") %(i)
-        #outputStatFile = outputDir + fileNamePrefix + "_{0}".format(i) + "_stat.txt"
         outputStatFile = outputDir + "stat_{0}".format(i) + ".txt"
         invalidStatFileName = outputDir + fileNamePrefix + "_{0}".format(i) + "_stat_invalid.txt"
         result.append(pool.apply_async(getStatInfo, (pathGroups[i], outputStatFile, invalidStatFileName, fileNamePrefix + "_{0}".format(i))))
@@ -672,7 +602,6 @@ def mergeStatFiles(statFileDir, fileNamePrefix,  processNum, statFileName):
 
     fileHandle.close()
 
-
 def divAllPathsToGroups(allPaths, groupNum):
     
     """
@@ -690,7 +619,7 @@ def divAllPathsToGroups(allPaths, groupNum):
         else:
             groupSize = totalPathNum / groupNum + 1
 
-    logger.info("Group size is: {0}".format(groupSize))
+    logger.debug("Group size is: {0}".format(groupSize))
 
     j = 0
     for i in xrange(0, totalPathNum):
@@ -720,7 +649,6 @@ def genFileSizeRangeDict(classifySize=500, classifyNum=5):
        high = "%5d"%(i * classifySize + classifySize)
        key = str(low) + "~~" + str(high)
        rangeDict[key] = [0,0,typeList,pathList,userList, userGrpList]
-       #rangeDict[key] = [0,0,typeList,pathList]
 
    key = "%5d"%((classifyNum - 1) * classifySize)
    key = str(key) + "+"
@@ -732,7 +660,7 @@ def genFileSizeRangeDict(classifySize=500, classifyNum=5):
    lastUserList = []
    lastUserGrpList = []
    rangeDict[key] = [0,0,lastTypeList,lastPathList, lastUserList, lastUserGrpList]
-   #rangeDict[key] = [0,0,lastTypeList,lastPathList]
+
    return rangeDict
 
 def getRangeKey(rangeKeysList, fileSize, classifySize):
@@ -789,15 +717,9 @@ def getTypeCnt(pathListInfo):
 
     return sorted(typeCntList)
 
-
-
-
-
 def getUserCntSize(pathListInfo):
     userCntSizeList = []
-
     userCntSizeDict = {}
-
     lineNum = 0
     for item in pathListInfo:
         fileSize = item[1]
@@ -857,7 +779,6 @@ def getUserGrpCntSize(pathListInfo):
 
     return userGrpCntSizeListFinal
 
-
 def genFileSizeRangeDistribution(statInfoFile, classifySize=500, classifyNum=5, fileNameFlag="", outputDir="./"):
     lineNum = 0    
     fileTotalSize = 0
@@ -879,16 +800,12 @@ def genFileSizeRangeDistribution(statInfoFile, classifySize=500, classifyNum=5, 
             
             fileSize = int(fileSize)
             fileTotalSize = fileTotalSize + fileSize
-            #(name, ext) = os.path.splitext(fname)
-            
-            #if(len(ext) > 0 and ext[-1] == '\n'):
-                #ext = ext[:-1]
 
             rangeKey = getRangeKey(rangeKeys, fileSize, classifySize)
             fileSizeRangeDict[rangeKey][0] = fileSizeRangeDict[rangeKey][0] + fileSize
             fileSizeRangeDict[rangeKey][1] = fileSizeRangeDict[rangeKey][1] + 1
             fileSizeRangeDict[rangeKey][3].append((fname, fileSize, userName, userGrpName))
-            if(lineNum % 10000 == 0):
+            if(lineNum % 100000 == 0):
                 logger.info("{0} lines finisned processing".format(lineNum))
             
 
@@ -926,8 +843,7 @@ def genFileSizeRangeDistribution(statInfoFile, classifySize=500, classifyNum=5, 
         fileHandle.close()
 
     return fileSizeRangeDict
-def calcuDir2RegularFileNum(pathFile, outputFile, depthLevel = 3):
-
+def calDir2RegularFileNum(pathFile, outputFile, depthLevel = 3):
 
     filePathCounterDict = {}
     lineNum = 0
@@ -951,7 +867,6 @@ def calcuDir2RegularFileNum(pathFile, outputFile, depthLevel = 3):
                 lineNumSkipped = lineNumSkipped + 1
                 continue
             
-            #dirKey = "/" + dirs[0] + "/" + dirs[1] + "/" + dirs[2]
             dirKey = "/"
             for i in xrange(0, depthLevel):
                 dirKey = dirKey +  dirs[i] + "/"
@@ -974,7 +889,6 @@ def calcuDir2RegularFileNum(pathFile, outputFile, depthLevel = 3):
     logger.info(finalFilePathCounter)
     fileHandle = open(outputFile, "w")
     for item in finalFilePathCounter:
-        #line = "%-100s%30d\n"%(item[0], item[1])
         line = "%-30d%100s\n"%(item[1], item[0])
         fileHandle.write(line)
     fileHandle.close()
@@ -998,19 +912,6 @@ def assignToDirGroups(dirGroups, maxFileNum, dirName, fileNum):
 
 
 def divGroups(dir2FileNumList, outputFile, processNum):
-    lineNum = 0
-    #dir2FileNumList = []
-    #with open(inputFile) as f:
-        #for line in f:
-            #lineNum = lineNum + 1
-            #if(line[-1] == '\n'):
-                #line = line[0:-1]
-
-            ##(dirPath, fileNum) = line.split()
-            #(fileNum, dirPath) = line.split(None, 1)
-            #dir2FileNumList.append((dirPath, fileNum))
-
-            
     totalFileNum = sum([int(v[1]) for v in dir2FileNumList])
     logger.info("Total file num is: " + str(totalFileNum))
     fileNumPerProcess =int( math.ceil(float(totalFileNum) / float( processNum)))
@@ -1018,12 +919,10 @@ def divGroups(dir2FileNumList, outputFile, processNum):
     logger.info("File number for every process: " + str(fileNumPerProcess))
     dirGroups = initDirGroups(processNum)
 
-
     for item in dir2FileNumList:
         dirName = item[0]
         fileNum = int(item[1])
         assignToDirGroups(dirGroups, fileNumPerProcess, dirName, fileNum)
-
 
     fileHandle = open(outputFile, "w")
     fileHandle.write("Process Num: {0}, total file num: {1}, average file num for each process: {2}\n\n".format(processNum, totalFileNum, fileNumPerProcess))
@@ -1041,26 +940,15 @@ def divGroups(dir2FileNumList, outputFile, processNum):
 
     return dirGroupsList
 
-    #process2DirsList = []
-    #for(k, v) in dirGroups.iteritems():
-        #dirs = [ d[0] for d in v[1:]]
-        #item = (k, dirs)
-        #process2DirsList.append(item)
-
-    #finalProcess2DirsList = process2DirsList#sorted(process2DirsList, key=lambda x: x[0])
-
-    #return finalProcess2DirsList
-
-
 def makeBalanceDirGroups(historyFilePathListFile, tmpOutputDir, processNum, level2Dirs):
     if(tmpOutputDir[-1] == "/"):
         tmpOutputDir = tmpOutputDir + "/"
     dir2RegularFileNumResultFile = tmpOutputDir + "dir2FileNum.txt"
-    dir2RegularFileNumList = calcuDir2RegularFileNum(historyFilePathListFile, dir2RegularFileNumResultFile, 3)
+    dir2RegularFileNumList = calDir2RegularFileNum(historyFilePathListFile, dir2RegularFileNumResultFile, 3)
     """
     Here we should remove dir in dir2RegularFileNumList that not in level2Dirs
     """
-    logger.info("Before removing dir not in level2Dirs, dir2RegularFileNumList len is {0}, dirs are: {1} ".format(len(dir2RegularFileNumList), str(dir2RegularFileNumList)) )
+    logger.debug("Before removing dir not in level2Dirs, dir2RegularFileNumList len is {0}, dirs are: {1} ".format(len(dir2RegularFileNumList), str(dir2RegularFileNumList)) )
     finalDir2RegularFileNumList = []
     logger.info("dir2RegularFileNumList = " + str(dir2RegularFileNumList))
     for item in dir2RegularFileNumList:
@@ -1068,34 +956,32 @@ def makeBalanceDirGroups(historyFilePathListFile, tmpOutputDir, processNum, leve
         if(dirName in level2Dirs):
             finalDir2RegularFileNumList.append(item)
 
-    logger.info("After removing dir not in level2Dirs, dir2RegularFileNumList len is {0}, dirs are: {1} ".format(len(finalDir2RegularFileNumList), str(finalDir2RegularFileNumList)) )
+    logger.debug("After removing dir not in level2Dirs, dir2RegularFileNumList len is {0}, dirs are: {1} ".format(len(finalDir2RegularFileNumList), str(finalDir2RegularFileNumList)) )
     process2DirsResultFile = tmpOutputDir + "process2Dirs.txt"
     dirGroups = divGroups(finalDir2RegularFileNumList, process2DirsResultFile, processNum)
     
     """
     Here we still need to add dir that in level2Dirs but not in finalDir2RegularFileNumList to finalDirGroups
     """
-    
     logger.info("finalDir2RegularFileNumList = " + str(finalDir2RegularFileNumList))
 
     dirs1 = [v[0][0:-1] for v in finalDir2RegularFileNumList]
-    logger.info("dirs1: len:{0}, value:{1} ".format(len(dirs1), dirs1))
+    logger.debug("dirs1: len:{0}, value:{1} ".format(len(dirs1), dirs1))
     dirs1 = set(dirs1)
     dirs2 = set(level2Dirs)
-    logger.info("dirs2: len:{0}, value:{1} ".format(len(list(dirs2)), list(dirs2)))
+    logger.debug("dirs2: len:{0}, value:{1} ".format(len(list(dirs2)), list(dirs2)))
     newDirs = dirs2 - dirs1
     newDirs = list(newDirs)
-    logger.info("newDirs: len:{0}, value:{1} ".format(len(newDirs), newDirs))
+    logger.debug("newDirs: len:{0}, value:{1} ".format(len(newDirs), newDirs))
     newDirsGroups = divDirsToGroups(newDirs, processNum)
 
-    logger.info("New Dir Group is: " + str(newDirsGroups))
-    logger.info("Start to assign new dir group to dirGroups")
+    logger.debug("New Dir Group is: " + str(newDirsGroups))
+    logger.debug("Start to assign new dir group to dirGroups")
     groupNum = len(newDirsGroups)
     for i in xrange(0, groupNum):
         dirGroups[groupNum - i - 1] = dirGroups[groupNum -i - 1] + newDirsGroups[i]
-    logger.info("End to assign new dir group to dirGroups")
+    logger.debug("End to assign new dir group to dirGroups")
     return dirGroups
-
 
 def getHistoryAllPath(historyAllPathFile):
     historyAllPaths = []
@@ -1153,7 +1039,6 @@ def mergeWithHistoryStatFile(historyStatFile, increasingFileList, reducingFileLi
     finalStatFile= outputDir + "all_stat_result_final.txt"
     histStatInfoDict = getHistoryStatInfo(historyStatFile)
 
-
     reducingFileStatInfo = []
     reducingFileName = outputDir + "all_reducing_stat_result.txt"
     for (index, fn) in enumerate(reducingFileList):
@@ -1172,7 +1057,6 @@ def mergeWithHistoryStatFile(historyStatFile, increasingFileList, reducingFileLi
 
         if((index + 1) % 10000 == 0):
             logger.info("{0} lines finish processing".format(index + 1))
-    
 
     fileHandle = open(finalStatFile, "w")
     for k, v in histStatInfoDict.iteritems():
@@ -1187,61 +1071,31 @@ def mergeWithHistoryStatFile(historyStatFile, increasingFileList, reducingFileLi
 
     return (finalStatFile, reducingFileName)
 
+def genResultFiles(outputDir, statFileName, fileUniqID, baseTime):
+    typeTypePeriod2NumSizeFile = outputDir + "type_type_period_2_num_size{0}.txt".format(fileUniqID)
+    type2NumSizeFile = outputDir + "type_2_num_size{0}.txt".format(fileUniqID)
+    genTypeTypePeriod2NumSize(statFileName, typeTypePeriod2NumSizeFile, type2NumSizeFile, baseTime) 
+    logger.info("Gen type 2 num and size file [{0}] and type type period 2 num and size file [{1}] success".format(type2NumSizeFile, typeTypePeriod2NumSizeFile))
+
+    user2UsageFile = outputDir + "user_usage{0}.txt".format(fileUniqID)
+    grp2UsageFile = outputDir + "group_usage{0}.txt".format(fileUniqID)
+    grp2UserFile = outputDir + "group_2_user{0}.txt".format(fileUniqID)
+    gen_user_grp_usage(statFileName, user2UsageFile, grp2UsageFile, grp2UserFile)
+    logger.info("Gen user to usage file, group 2 usage file ,group 2 user file success, file names are [{0}, {1}, {2}]".format(user2UsageFile, grp2UsageFile, grp2UserFile))
+    
+    genFileSizeRangeDistribution(statFileName, classifySize, classifyNum, fileUniqID, outputDir)
+    logger.info("Gen file size distribution result files success")
+
 
 def genFinalResultFiles(outputDir, outputStatFileName, baseTime):
-    logger.info("start to gen type -> num and size result")
-    typeTypePeriod2NumSizeFile = outputDir + "type_type_period_2_num_size.txt"
-    type2NumSizeFile = outputDir + "type_2_num_size.txt"
-    genTypeTypePeriod2NumSize(outputStatFileName, typeTypePeriod2NumSizeFile, type2NumSizeFile, baseTime) 
-    logger.info("End to gen type -> num and size result")
-
-    logger.info("Start to gen user group usage result")
-    user2UsageFile = outputDir + "user_usage.txt"
-    grp2UsageFile = outputDir + "group_usage.txt"
-    grp2UserFile = outputDir + "group_2_user.txt"
-    gen_user_grp_usage(outputStatFileName, user2UsageFile, grp2UsageFile, grp2UserFile)
-    logger.info("End to gen user group usage result")
+    genResultFiles(outputDir, outputStatFileName, "_total", baseTime)
     
-    logger.info("Start to gen file size distribution info")
-    genFileSizeRangeDistribution(outputStatFileName, classifySize, classifyNum, "_total", outputDir)
-    logger.info("End to gen file size distribution info")
-
 def genIncreasingResultFiles(outputDir, increasingStatFileName, baseTime):
-    logger.info("start to gen type -> num and size result")
-    typeTypePeriod2NumSizeFile = outputDir + "type_type_period_2_num_size_increasing.txt"
-    type2NumSizeFile = outputDir + "type_2_num_size_increasing.txt"
-    genTypeTypePeriod2NumSize(increasingStatFileName, typeTypePeriod2NumSizeFile, type2NumSizeFile, baseTime) 
-    logger.info("End to gen type -> num and size result")
-
-    logger.info("Start to gen user group usage result")
-    user2UsageFile = outputDir + "user_usage_increasing.txt"
-    grp2UsageFile = outputDir + "group_usage_increasing.txt"
-    grp2UserFile = outputDir + "group_2_user_increasing.txt"
-    gen_user_grp_usage(increasingStatFileName, user2UsageFile, grp2UsageFile, grp2UserFile)
-    logger.info("End to gen user group usage result")
-    
-    logger.info("Start to gen file size distribution info")
-    genFileSizeRangeDistribution(increasingStatFileName, classifySize, classifyNum, "_increasing", outputDir)
-    logger.info("End to gen file size distribution info")
+    genResultFiles(outputDir, increasingStatFileName, "_increasing", baseTime);
 
 def genReducingResultFiles(outputDir, reducingStatFileName, baseTime):
-    logger.info("start to gen type -> num and size result")
-    typeTypePeriod2NumSizeFile = outputDir + "type_type_period_2_num_size_reducing.txt"
-    type2NumSizeFile = outputDir + "type_2_num_size_reducing.txt"
-    genTypeTypePeriod2NumSize(reducingStatFileName, typeTypePeriod2NumSizeFile, type2NumSizeFile, baseTime) 
-    logger.info("End to gen type -> num and size result")
-
-    logger.info("Start to gen user group usage result")
-    user2UsageFile = outputDir + "user_usage_reducing.txt"
-    grp2UsageFile = outputDir + "group_usage_reducing.txt"
-    grp2UserFile = outputDir + "group_2_user_reducing.txt"
-    gen_user_grp_usage(reducingStatFileName, user2UsageFile, grp2UsageFile, grp2UserFile)
-    logger.info("End to gen user group usage result")
+    genResultFiles(outputDir, reducingStatFileName, "_reducing", baseTime)
     
-    logger.info("Start to gen file size distribution info")
-    genFileSizeRangeDistribution(reducingStatFileName, classifySize, classifyNum, "_reducing", outputDir)
-    logger.info("End to gen file size distribution info")
-
 if __name__ == "__main__":
 
     logger.info("start to analysis directory, current time is: {0}".format(getCurrDateTime()))
@@ -1293,7 +1147,6 @@ if __name__ == "__main__":
     previousFilePathFile = args.previous_path_file
     previousStatFile = args.previous_stat_file
 
-
     if(previousFilePathFile != "None" and previousStatFile == "None"):
         logger.error("History path file and stat file must be specified simutaneously, using -b and -z to specify!!!")
         exit()
@@ -1312,51 +1165,50 @@ if __name__ == "__main__":
     mkdir(outputDir)
     mkdir(intermediateResultDir)
 
-    (level1dirs, level2dirs) = getLevel12Dirs(dirToSearch)
+    (level1Dirs, level2Dirs) = getLevel12Dirs(dirToSearch)
 
     """
-    here we write the level2dirs to file so that we can use mpi process the search the regular file
+    here we write the level2Dirs to file so that we can use mpi process the search the regular file
     """
-    logger.info("start to write level 2 dirs to file level2dirs.txt")
-    filehandle = open("level2dirs.txt", "w");
-    for item in level2dirs:
-        filehandle.write(item + "\n");
-    filehandle.close()
-    logger.info("end to write level 2 dirs to file level2dirs.txt")
+    logger.info("start to write level 2 dirs to file level2Dirs.txt")
+    fileHandle = open("level2Dirs.txt", "w");
+    for item in level2Dirs:
+        fileHandle.write(item + "\n");
+    fileHandle.close()
+    logger.info("end to write level 2 dirs to file level2Dirs.txt")
 
-    level12regularfiles = getLevel12RegularFiles(dirToSearch)
-    logger.info("regular files in level 1&2 directory: " + str(level12regularfiles))
+    level12RegularFiles = getLevel12RegularFiles(dirToSearch)
+    logger.info("regular files in level 1&2 directory: " + str(level12RegularFiles))
 
     if(isShuffle == 1):
-        logger.info("dir depth that >= 2 before shuffle: " + str(level2dirs))
-        shuffle(level2dirs)
-        logger.info("dir depth that >= 2 after shuffle: " + str(level2dirs))
+        logger.info("dir depth that >= 2 before shuffle: " + str(level2Dirs))
+        shuffle(level2Dirs)
+        logger.info("dir depth that >= 2 after shuffle: " + str(level2Dirs))
 
-    dirgroups = divDirsToGroups(level2dirs, processNum)  
+    dirGroups = divDirsToGroups(level2Dirs, processNum)  
     """
     if we have previous scanned file path list file, then we should make a balance dir dividing
     """
     if(previousFilePathFile != "None"):
         logger.info("start to make a balance dir dividing based on previous scanned file: " + previousFilePathFile)
-        dirgroups = makeBalanceDirGroups(previousFilePathFile, intermediateResultDir, processNum, level2dirs)
+        dirGroups = makeBalanceDirGroups(previousFilePathFile, intermediateResultDir, processNum, level2Dirs)
         logger.info("end to make a balance dir dividing based on previous scanned file: " + previousFilePathFile)
-    logger.info("number of leve2dirs: " + str(len(level2dirs)))
+    logger.info("number of leve2dirs: " + str(len(level2Dirs)))
     logger.info("dir groups result:")
     dirgroupresultfile = intermediateResultDir + "dirgroup.txt"
 
-    filehandle = open(dirgroupresultfile, "w")
+    fileHandle = open(dirgroupresultfile, "w")
     index = 0
-    for item in dirgroups:
+    for item in dirGroups:
         logger.info(item)
-        filehandle.write("process {0} dir list: len: {1}\n\n".format(index, len(item)))
+        fileHandle.write("process {0} dir list: len: {1}\n\n".format(index, len(item)))
         for v in item:
-            filehandle.write(v + "\n")
+            fileHandle.write(v + "\n")
         
-        filehandle.write("\n")
+        fileHandle.write("\n")
         index = index + 1
 
-    filehandle.close()
-
+    fileHandle.close()
 
     if(isUsedMPI == 1):
         """
@@ -1364,44 +1216,44 @@ if __name__ == "__main__":
         we save all dirs file and file path files to the intermediate result dir
         """
         for i in xrange(processNum):
-            group = dirgroups[i]
+            group = dirGroups[i]
             fname = intermediateResultDir + "dirs_" + str(i) + ".txt"
-            filehandle = open(fname, "w")
+            fileHandle = open(fname, "w")
             for item in group:
-                filehandle.write(item + "\n")
-            filehandle.close()
+                fileHandle.write(item + "\n")
+            fileHandle.close()
 
         """
         mpiexec -n 180 -f machinefile ./genfilepath ./tmp ./result
         """
-        mpicommandgenfilepath = "mpiexec -f ./machinefile -n " + str(processNum) + " ./genfilepath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
+        mpiCommandGenFilePath = "mpiexec -f ./machinefile -n " + str(processNum) + " ./genfilepath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
 
-        logger.info("mpicommandgenfilepath = " + mpicommandgenfilepath)
+        logger.info("mpiCommandGenFilePath = " + mpiCommandGenFilePath)
 
         """
         here we use mpi program to find all regular files by a number of process.
         """
-        os.system(mpicommandgenfilepath)
+        os.system(mpiCommandGenFilePath)
 
     else:
         logger.info("start to find all regular files in directory that depth is > 2")
-        findAllRegularFile(dirgroups, intermediateResultDir,  fileNamePrefix, processNum) 
+        findAllRegularFile(dirGroups, intermediateResultDir,  fileNamePrefix, processNum) 
         logger.info("end to find all regular files in directory that depth is > 2")
 
     logger.info("sleep for 2 seconds for merging file path files")
     time.sleep(2)
     logger.info("start to merge file path files")
-    outputpathfilename = outputDir + "all_file_path_result.txt"
-    allpaths = mergePathFiles(intermediateResultDir, fileNamePrefix, processNum, level12regularfiles, outputpathfilename)
+    outputPathFileName = outputDir + "all_file_path_result.txt"
+    allpaths = mergePathFiles(intermediateResultDir, fileNamePrefix, processNum, level12RegularFiles, outputPathFileName)
     logger.info("end to merge file path files")
 
     """
     we append the regular files in level 1 and 2 dir to the first process file path file
     """
-    filehandle = open(intermediateResultDir + fileNamePrefix + "_0.txt", "a+")
-    for item in level12regularfiles:
-        filehandle.write(item + "\n")
-    filehandle.close()
+    fileHandle = open(intermediateResultDir + fileNamePrefix + "_0.txt", "a+")
+    for item in level12RegularFiles:
+        fileHandle.write(item + "\n")
+    fileHandle.close()
 
 
     logger.info("sleep 2 seconds and then to stat file ")
@@ -1409,62 +1261,61 @@ if __name__ == "__main__":
     """
     here we get the reducing file list and increasing file list
     """
-    historyallpaths = set()
+    historyAllPaths = set()
     if(previousFilePathFile != "None"):
-        historyallpaths = getHistoryAllPath(previousFilePathFile)
-        historyallpaths = set(historyallpaths)
+        historyAllPaths = getHistoryAllPath(previousFilePathFile)
+        historyAllPaths = set(historyAllPaths)
 
-    currentallpaths = []
+    currAllPaths = []
     for item in allpaths:
         if(item[-1] == "\n"):
-            currentallpaths.append(item[0:-1])
+            currAllPaths.append(item[0:-1])
         else:
-            currentallpaths.append(item)
+            currAllPaths.append(item)
 
-    currentallpaths = set(currentallpaths)
-    reducingFileList = list(historyallpaths - currentallpaths)
-    increasingFileList = list(currentallpaths - historyallpaths)
-
+    currAllPaths = set(currAllPaths)
+    reducingFileList = list(historyAllPaths - currAllPaths)
+    increasingFileList = list(currAllPaths - historyAllPaths)
 
     reducingfilename = intermediateResultDir + "reducingfile.txt"
     increasingfilename = intermediateResultDir + "increasingfile.txt"
-    filehandle1 = open(reducingfilename, "w")
-    filehandle2 = open(increasingfilename, "w")
+    fileHandle1 = open(reducingfilename, "w")
+    fileHandle2 = open(increasingfilename, "w")
 
-    filehandle1.write("reducing file num: {0}\n\n".format(len(reducingFileList)))
+    fileHandle1.write("reducing file num: {0}\n\n".format(len(reducingFileList)))
     for item in reducingFileList:
-        filehandle1.write(item + "\n")
+        fileHandle1.write(item + "\n")
 
-    filehandle1.close()
+    fileHandle1.close()
 
-    filehandle2.write("increasing file num: {0}\n\n".format(len(increasingFileList)))
+    fileHandle2.write("increasing file num: {0}\n\n".format(len(increasingFileList)))
     for item in increasingFileList:
-        filehandle2.write(item + "\n")
-    filehandle2.close()
+        fileHandle2.write(item + "\n")
+    fileHandle2.close()
     """
     end to get the increasing file list and reducing file list
     """
-    #pathgroups = divallpathstogroups(allpaths, processNum)
+    #pathGroups = divallpathstogroups(allpaths, processNum)
     """
     get the path groups for stat operation based on the increasing file list
     """
-    pathgroups = divAllPathsToGroups(increasingFileList, processNum)
+    pathGroups = divAllPathsToGroups(increasingFileList, processNum)
     
     if(isUsedMPI == 1):
         """
-        we write item in pathgroups to each file ,so that for every mpi process to do stat operation
+        we write item in pathGroups to each file ,so that for every mpi process to do stat operation
         """
         for i in xrange(processNum):
-            group = pathgroups[i]
+            group = pathGroups[i]
             fname = intermediateResultDir + "path_list_" + str(i) + ".txt"
-            filehandle = open(fname, "w")
+            fileHandle = open(fname, "w")
             for item in group:
                 if(item[-1] == '\n'):
-                    filehandle.write(item)
+                    fileHandle.write(item)
                 else:
-                    filehandle.write(item + "\n")
+                    fileHandle.write(item + "\n")
 
-            filehandle.close()
+            fileHandle.close()
 
         """
         mpiexec -f machinefile -n 24 ./statfilepath tmp tmp huabin
@@ -1478,7 +1329,7 @@ if __name__ == "__main__":
         """
         os.system(mpicommandstatfilepath)
     else:
-        statAllRegularFile(pathgroups, intermediateResultDir, fileNamePrefix, processNum)
+        statAllRegularFile(pathGroups, intermediateResultDir, fileNamePrefix, processNum)
 
     outputStatFileName = outputDir + args.stat_file_name 
     mergeStatFiles(intermediateResultDir, "stat", processNum, outputStatFileName)
@@ -1489,7 +1340,7 @@ if __name__ == "__main__":
     logger.info("sleep 1 second then to generate various result file")
     time.sleep(1)
     """
-    here we need to update stat result file based on increasingfilst and historystatinfo
+    here we need to update stat result file based on increasingFileList and historystatinfo
     """
     if(previousFilePathFile != "None" and previousStatFile != "None"):
         (outputStatFileName, reducingStatFileName) = mergeWithHistoryStatFile(previousStatFile, increasingFileList, reducingFileList, outputDir)

@@ -26,7 +26,7 @@ class MyLogger(object):
         fileHandler.setLevel(loggerLevel)
 
         consoleHandler = logging.StreamHandler()
-        consoleHandler.setLevel(loggerLevel)
+        consoleHandler.setLevel(logging.INFO)
 
         formatter = logging.Formatter('%(filename)s:%(funcName)s:%(lineno)d]-%(asctime)s-%(name)s-%(levelname)s: %(message)s')
 
