@@ -1496,7 +1496,5 @@ if __name__ == "__main__":
         genIncreasingResultFiles(outputDir, increasingStatFileName, baseTime)
         genReducingResultFiles(outputDir, reducingStatFileName, baseTime)
 
-
     genFinalResultFiles(outputDir, outputStatFileName, baseTime)
-    
     exceptFileHandle.close()
