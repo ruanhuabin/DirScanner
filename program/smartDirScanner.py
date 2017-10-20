@@ -254,6 +254,294 @@ def sizeof_fmt(num, suffix='B'):
     return "%.1f%s%s" % (num, 'Yi', suffix)
 
 
+
+def getDayGap(t1, t2):
+    timeGap = getTimeGap(t1, t2)
+    dayGap = timeGap[0]
+    dayGap = dayGap.split()[0]
+    dayGap = int(dayGap)
+    return dayGap
+
+
+def genUserFileAccessPeriodInfo(statFileName, periodThreshold, outputDir="./"):
+    """
+    This function is used to gen information about how many files each user 
+    had not accessed for more|less than periodThreshold days. 
+    The result will be used to notify user to delete data with long time unaccess.
+    @input: statFileName, a file contains file meta info
+            periodThreshold, a day number used as classify basis.
+            outputDir, a directory used to ouput the result file
+    @output: a number of files contains the user file access period information
+    """
+    if(outputDir[-1] != "/"):
+        outputDir = outputDir + "/"
+
+    """
+    Start to collect user -> file access period information, save result in user2FTS:
+    key = userName, value = (fileName, accessTime, fileSize)
+    """
+    user2FTS = {}
+    lineNum = 0
+    with open(statFileName) as f:
+        for line in f:
+            line       = line[0:-1]
+            metaInfo   = line.split('#')
+            accessTime = metaInfo[1]
+            fileName   = metaInfo[3]
+            userName   = metaInfo[4]
+            fileSize   = int(metaInfo[-1])
+            #logger.info("({0}, {1}, {2}, {3})".format(accessTime, fileName, userName, fileSize))
+            if(user2FTS.has_key(userName)):
+                user2FTS[userName].append((fileName, accessTime, fileSize))
+            else:
+                user2FTS[userName] = [(fileName, accessTime, fileSize)]
+
+            lineNum = lineNum + 1
+            if(lineNum % 100000 == 0):
+                logger.info("{0} lines finish processing".format(lineNum))
+
+    logger.info("{0} lines finish processing".format(lineNum))
+
+    """
+    Split info in user2FTS to user2FG, user2FS, user2NSG, user2NSS based on periodThreshold classification
+    user2FG  : user --> file path list,those files last access time is >= periodThreshold days
+    user2NSG : user--> file total number, file total size,files last access time is >=  periodThreshold days
+    user2FGS : user --> file path list,those files last access time is < periodThreshold days
+    user2NSS : user--> file total number, file total size, files last access time is < periodThreshold days
+    """
+    user2FG  = {}
+    user2FS  = {}
+    user2NSG = {}
+    user2NSS = {}
+    baseTime = getCurrDateTime()
+    lineNum = 0
+    logger.info("baseTime is : {0}".format(baseTime))
+    for(k, v) in user2FTS.iteritems():
+        for vv in v:
+            fileName   = vv[0]
+            accessTime = vv[1]
+            fileSize   = vv[2]
+            dayGap     = getDayGap(accessTime, baseTime)
+            """
+            Put file path to user2FG if dayGap >= periodThreshold, else put it to user2FS
+            """
+            if(int(dayGap) >= int(periodThreshold)):
+                if(user2FG.has_key(k)):
+                    user2FG[k].append((fileName, fileSize))
+                else:
+                    user2FG[k] = [(fileName, fileSize)]
+            else:
+                if(user2FS.has_key(k)):
+                    user2FS[k].append((fileName, fileSize))
+                else:
+                    user2FS[k] = [(fileName, fileSize)]
+            lineNum = lineNum + 1
+            if(lineNum % 100000 == 0):
+                logger.info("{0} lines finish processing".format(lineNum))
+    
+    logger.info("{0} lines finish processing".format(lineNum))
+
+
+    #logger.info("user2FG: " + str(user2FG))
+    lineNum = 0
+    for(k, v) in user2FG.iteritems():
+        fileNum     = len(v)
+        totalSize   = sum([vv[1] for vv in v])
+        totalSize   = sizeof_fmt(totalSize)
+        user2NSG[k] = (fileNum, totalSize)
+        lineNum = lineNum + 1
+        if(lineNum % 100000 == 0):
+            logger.info("{0} lines finish processing".format(lineNum))
+    
+    logger.info("{0} lines finish processing".format(lineNum))
+
+    lineNum = 0
+    #logger.info("user2FS: " + str(user2FS))
+    for(k, v) in user2FS.iteritems():
+        fileNum     = len(v)
+        totalSize   = sum([vv[1] for vv in v])
+        totalSize   = sizeof_fmt(totalSize)
+        user2NSS[k] = (fileNum, totalSize)
+        lineNum = lineNum + 1
+        if(lineNum % 100000 == 0):
+            logger.info("{0} lines finish processing".format(lineNum))
+    
+    logger.info("{0} lines finish processing".format(lineNum))
+ 
+    
+    for(userName, v)in user2NSG.iteritems():
+        outputFileName = outputDir + "user_" + userName + "_{0}+.txt".format(periodThreshold)
+        fileHandle = open(outputFileName, "w")
+        fileHandle.write("User ID:{0}\n".format(userName))
+        fileHandle.write("File number  not accessed for more than {0} days: {1}\n".format(periodThreshold, v[0]))
+        fileHandle.write("File total Size: {0}\n".format(v[1]))
+        fileHandle.write("File list: \n".format(v[1]))
+        fileHandle.close()
+    for(userName, v)in user2NSS.iteritems():
+        outputFileName = outputDir + "user_" + userName + "_{0}-.txt".format(periodThreshold)
+        fileHandle = open(outputFileName, "w")
+        fileHandle.write("User ID:{0}\n".format(userName))
+        fileHandle.write("File number accessed within {0} days: {1}\n".format(periodThreshold, v[0]))
+        fileHandle.write("File total Size: {0}\n".format(v[1]))
+        fileHandle.write("File list: \n".format(v[1]))
+        fileHandle.close()
+
+    
+    for(userName, v) in user2FG.iteritems():
+        outputFileName = outputDir + "user_" + userName + "_{0}+.txt".format(periodThreshold)
+        fileHandle = open(outputFileName, "a")
+        for vv in v:
+            fileHandle.write("{0}\n".format(vv[0]))
+        fileHandle.close()
+
+    for(userName, v) in user2FS.iteritems():
+        outputFileName = outputDir + "user_" + userName + "_{0}-.txt".format(periodThreshold)
+        fileHandle = open(outputFileName, "a")
+        for vv in v:
+            fileHandle.write("{0}\n".format(vv[0]))
+        fileHandle.close()
+
+
+def genGroupFileAccessPeriodInfo(statFileName, periodThreshold, outputDir="./"):
+    """
+    This function is used to gen information about how many files each user 
+    had not accessed for more|less than periodThreshold days. 
+    The result will be used to notify user to delete data with long time unaccess.
+    @input: statFileName, a file contains file meta info
+            periodThreshold, a day number used as classify basis.
+            outputDir, a directory used to ouput the result file
+    @output: a number of files contains the user file access period information
+    """
+    if(outputDir[-1] != "/"):
+        outputDir = outputDir + "/"
+
+    """
+    Start to collect user -> file access period information, save result in user2FTS:
+    key = userName, value = (fileName, accessTime, fileSize)
+    """
+    user2FTS = {}
+    lineNum = 0
+    with open(statFileName) as f:
+        for line in f:
+            line       = line[0:-1]
+            metaInfo   = line.split('#')
+            accessTime = metaInfo[1]
+            fileName   = metaInfo[3]
+            groupName   = metaInfo[5]
+            fileSize   = int(metaInfo[-1])
+            #logger.info("({0}, {1}, {2}, {3})".format(accessTime, fileName, groupName, fileSize))
+            if(user2FTS.has_key(groupName)):
+                user2FTS[groupName].append((fileName, accessTime, fileSize))
+            else:
+                user2FTS[groupName] = [(fileName, accessTime, fileSize)]
+
+            lineNum = lineNum + 1
+            if(lineNum % 100000 == 0):
+                logger.info("{0} lines finish processing".format(lineNum))
+
+    logger.info("{0} lines finish processing".format(lineNum))
+
+    """
+    Split info in user2FTS to user2FG, user2FS, user2NSG, user2NSS based on periodThreshold classification
+    user2FG  : user --> file path list,those files last access time is >= periodThreshold days
+    user2NSG : user--> file total number, file total size,files last access time is >=  periodThreshold days
+    user2FGS : user --> file path list,those files last access time is < periodThreshold days
+    user2NSS : user--> file total number, file total size, files last access time is < periodThreshold days
+    """
+    user2FG  = {}
+    user2FS  = {}
+    user2NSG = {}
+    user2NSS = {}
+    baseTime = getCurrDateTime()
+    lineNum = 0
+    logger.info("baseTime is : {0}".format(baseTime))
+    for(k, v) in user2FTS.iteritems():
+        for vv in v:
+            fileName   = vv[0]
+            accessTime = vv[1]
+            fileSize   = vv[2]
+            dayGap     = getDayGap(accessTime, baseTime)
+            """
+            Put file path to user2FG if dayGap >= periodThreshold, else put it to user2FS
+            """
+            if(int(dayGap) >= int(periodThreshold)):
+                if(user2FG.has_key(k)):
+                    user2FG[k].append((fileName, fileSize))
+                else:
+                    user2FG[k] = [(fileName, fileSize)]
+            else:
+                if(user2FS.has_key(k)):
+                    user2FS[k].append((fileName, fileSize))
+                else:
+                    user2FS[k] = [(fileName, fileSize)]
+            lineNum = lineNum + 1
+            if(lineNum % 100000 == 0):
+                logger.info("{0} lines finish processing".format(lineNum))
+    
+    logger.info("{0} lines finish processing".format(lineNum))
+
+
+    #logger.info("user2FG: " + str(user2FG))
+    lineNum = 0
+    for(k, v) in user2FG.iteritems():
+        fileNum     = len(v)
+        totalSize   = sum([vv[1] for vv in v])
+        totalSize   = sizeof_fmt(totalSize)
+        user2NSG[k] = (fileNum, totalSize)
+        lineNum = lineNum + 1
+        if(lineNum % 100000 == 0):
+            logger.info("{0} lines finish processing".format(lineNum))
+    
+    logger.info("{0} lines finish processing".format(lineNum))
+
+    lineNum = 0
+    #logger.info("user2FS: " + str(user2FS))
+    for(k, v) in user2FS.iteritems():
+        fileNum     = len(v)
+        totalSize   = sum([vv[1] for vv in v])
+        totalSize   = sizeof_fmt(totalSize)
+        user2NSS[k] = (fileNum, totalSize)
+        lineNum = lineNum + 1
+        if(lineNum % 100000 == 0):
+            logger.info("{0} lines finish processing".format(lineNum))
+    
+    logger.info("{0} lines finish processing".format(lineNum))
+ 
+    
+    for(groupName, v)in user2NSG.iteritems():
+        outputFileName = outputDir + "group_" + groupName + "_{0}+.txt".format(periodThreshold)
+        fileHandle = open(outputFileName, "w")
+        fileHandle.write("Group ID:{0}\n".format(groupName))
+        fileHandle.write("File number  not accessed for more than {0} days: {1}\n".format(periodThreshold, v[0]))
+        fileHandle.write("File total Size: {0}\n".format(v[1]))
+        fileHandle.write("File list: \n".format(v[1]))
+        fileHandle.close()
+    for(groupName, v)in user2NSS.iteritems():
+        outputFileName = outputDir + "group_" + groupName + "_{0}-.txt".format(periodThreshold)
+        fileHandle = open(outputFileName, "w")
+        fileHandle.write("Group ID:{0}\n".format(groupName))
+        fileHandle.write("File number accessed within {0} days: {1}\n".format(periodThreshold, v[0]))
+        fileHandle.write("File total Size: {0}\n".format(v[1]))
+        fileHandle.write("File list: \n".format(v[1]))
+        fileHandle.close()
+
+    
+    for(groupName, v) in user2FG.iteritems():
+        outputFileName = outputDir + "group_" + groupName + "_{0}+.txt".format(periodThreshold)
+        fileHandle = open(outputFileName, "a")
+        for vv in v:
+            fileHandle.write("{0}\n".format(vv[0]))
+        fileHandle.close()
+
+    for(groupName, v) in user2FS.iteritems():
+        outputFileName = outputDir + "group_" + groupName + "_{0}-.txt".format(periodThreshold)
+        fileHandle = open(outputFileName, "a")
+        for vv in v:
+            fileHandle.write("{0}\n".format(vv[0]))
+        fileHandle.close()
+
+
+
 def addToDict(dictData, item):
     k = item[0]
     v1 = item[1]
@@ -1071,7 +1359,7 @@ def mergeWithHistoryStatFile(historyStatFile, increasingFileList, reducingFileLi
 
     return (finalStatFile, reducingFileName)
 
-def genResultFiles(outputDir, statFileName, fileUniqID, baseTime):
+def genResultFiles(outputDir, statFileName, fileUniqID, baseTime, periodThreshold):
     typeTypePeriod2NumSizeFile = outputDir + "type_type_period_2_num_size{0}.txt".format(fileUniqID)
     type2NumSizeFile = outputDir + "type_2_num_size{0}.txt".format(fileUniqID)
     genTypeTypePeriod2NumSize(statFileName, typeTypePeriod2NumSizeFile, type2NumSizeFile, baseTime) 
@@ -1086,9 +1374,12 @@ def genResultFiles(outputDir, statFileName, fileUniqID, baseTime):
     genFileSizeRangeDistribution(statFileName, classifySize, classifyNum, fileUniqID, outputDir)
     logger.info("Gen file size distribution result files success")
 
+    genUserFileAccessPeriodInfo(statFileName, periodThreshold, outputDir)
+    genGroupFileAccessPeriodInfo(statFileName, periodThreshold, outputDir)
 
-def genFinalResultFiles(outputDir, outputStatFileName, baseTime):
-    genResultFiles(outputDir, outputStatFileName, "_total", baseTime)
+
+def genFinalResultFiles(outputDir, outputStatFileName, baseTime, periodThreshold):
+    genResultFiles(outputDir, outputStatFileName, "_total", baseTime, periodThreshold)
     
 def genIncreasingResultFiles(outputDir, increasingStatFileName, baseTime):
     genResultFiles(outputDir, increasingStatFileName, "_increasing", baseTime);
@@ -1097,6 +1388,9 @@ def genReducingResultFiles(outputDir, reducingStatFileName, baseTime):
     genResultFiles(outputDir, reducingStatFileName, "_reducing", baseTime)
     
 if __name__ == "__main__":
+
+    #genUserFileAccessPeriodInfo("../testdata/stat10.txt", 100, "./tmp/")
+    #exit()
 
     logger.info("start to analysis directory, current time is: {0}".format(getCurrDateTime()))
     basetime =getCurrDateTime()
@@ -1113,7 +1407,8 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--operation", action="store", help="operation to execute", choices=['all', 'gen_file_distribution'], default='all')
     parser.add_argument("-c", "--classify_size", action="store", type=int, help="size in mb used to classify the result stat info, default is 1024mb", default=1024)
     parser.add_argument("-g", "--classify_num", action="store", type=int, help="num of classes to generate, default is to generate 2 classes", default=2)
-    parser.add_argument("-x", "--is_used_mpi", action="store", type=int, help="num of classify to generate, default is 0 indicating not to use mpi", choices=[0,1], default=0)
+    parser.add_argument("-x", "--is_used_mpi", action="store", type=int, help="whether to usd mpi process to run, default is 0 indicating not to use mpi", choices=[0,1], default=0)
+    parser.add_argument("-y", "--period_threshold", action="store", type=int, help="int period value used to gen user file period info, default is 100 days", default=100)
     parser.add_argument("-b", "--previous_path_file", action="store", help="a file path list file that is genenerated in privious scanning, this file is used for a purpose of balance scanning ", default="None")
     parser.add_argument("-z", "--previous_stat_file", action="store", help="a stat file that is genenerated in privious scanning, this file is used for a purpose of increasing stat operation ", default="None")
     args = parser.parse_args()
@@ -1146,6 +1441,7 @@ if __name__ == "__main__":
     isUsedMPI = args.is_used_mpi
     previousFilePathFile = args.previous_path_file
     previousStatFile = args.previous_stat_file
+    periodThreshold = args.period_threshold
 
     if(previousFilePathFile != "None" and previousStatFile == "None"):
         logger.error("History path file and stat file must be specified simutaneously, using -b and -z to specify!!!")
@@ -1347,5 +1643,5 @@ if __name__ == "__main__":
         genIncreasingResultFiles(outputDir, increasingStatFileName, baseTime)
         genReducingResultFiles(outputDir, reducingStatFileName, baseTime)
 
-    genFinalResultFiles(outputDir, outputStatFileName, baseTime)
+    genFinalResultFiles(outputDir, outputStatFileName, baseTime, periodThreshold)
     exceptFileHandle.close()
