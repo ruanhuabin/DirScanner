@@ -16,7 +16,7 @@ import multiprocessing
 import time
 import glob,os.path
 from random import shuffle
-from dir_scanner import searchRegularFile, mkdir, getCurrDateTime
+from smartDirScanner import searchRegularFile, mkdir, getCurrDateTime
 logger = MyLogger().getLogger()
 
 if __name__ == "__main__":

@@ -774,8 +774,13 @@ def getStatInfo(pathGroup, statResultFile, invalidResultFile, processName):
     timeFileInfo = {}
     fileNotExist = []
 
+
+    fileHandle1 = open(statResultFile, "w")
+    fileHandle2 = open(invalidResultFile, "w")
+    errorCnt = 0
     for fname in pathGroup:
         lineNum = lineNum + 1
+        
         #Be carefull: this check is must, otherwise the file will not be found
         if(fname[-1] == '\n'):
             fname = fname[0:-1]
@@ -798,36 +803,67 @@ def getStatInfo(pathGroup, statResultFile, invalidResultFile, processName):
 
                 timeFileInfo[fname] = (modifyTime, accessTime, changeTime, owner, group, fileSize)
             except Exception as exception:
-                logger.info("{0}:File with exception: {1}, set it owner to {2}, grp to {3}".format(processName, fname, "unknow_user_" + str(statInfo.st_uid), "unknow_grp_" + str(statInfo.st_gid)))
-                logger.warn("{0}:{1}:Exception Detail: {2}".format(processName, fname, str(exception)))
-                traceback.print_exc(file=sys.stdout)
+                errorCnt = errorCnt + 1
+                if(errorCnt % 10000 == 0):
+                    logger.info("{0}: {1}-th file with exception: {2}, set it owner to {3}, grp to {4}".format(processName, errorCnt, fname, "unknow_user_" + str(statInfo.st_uid), "unknow_grp_" + str(statInfo.st_gid)))
+                    logger.warn("{0}:{1}:Exception Detail: {2}".format(processName, fname, str(exception)))
+                    traceback.print_exc(file=sys.stdout)
                 timeFileInfo[fname] = (modifyTime, accessTime, changeTime, "unknow_user_" + str(statInfo.st_uid), "unknow_grp_" + str(statInfo.st_gid), fileSize)
         else:
             logger.error("{0}:File is not file: {1}".format(processName, fname))
             fileNotExist.append(fname)
 
+        """
+        We should write stat result to file if number of items in timeFileInfo exceeding a threshold value
+        """
+        if(len(timeFileInfo) == 5000):
+            for(fname, values) in timeFileInfo.iteritems():
+                cnt = cnt + 1
+                lineToWrite = values[0] + "#" + values[1] + "#" + values[2] + "#" + fname + "#" + values[3] + "#" + values[4] + "#" + values[5] +  "\n"
+                fileHandle1.write(lineToWrite)
 
-    logger.info("{0}:{1} lines finish processing".format(processName, lineNum))
+        if(len(fileNotExist) == 500):
+            for f in fileNotExist:
+                fileHandle2.write("{0}\n".format(f))
+
+        timeFileInfo.clear()
+        del fileNotExist[:]
 
 
-    fileHandle = open(statResultFile, "w")
-    
-    cnt = 0
-    logger.info("{0}: Start to write stat result info to file:{1}".format(processName, statResultFile))
     for(fname, values) in timeFileInfo.iteritems():
         cnt = cnt + 1
         lineToWrite = values[0] + "#" + values[1] + "#" + values[2] + "#" + fname + "#" + values[3] + "#" + values[4] + "#" + values[5] +  "\n"
-        fileHandle.write(lineToWrite)
-    logger.info("{0}: End to write stat result info to file:{1}".format(processName, statResultFile))
-    fileHandle.close()
+        fileHandle1.write(lineToWrite)
 
-    fileHandle = open(invalidResultFile, "w")
-    logger.info("{0}: start to write invalid result info to file:{1}".format(processName, invalidResultFile))
     for f in fileNotExist:
-        fileHandle.write("{0}\n".format(f))
-    fileHandle.close()
-    logger.info("{0}: End to write stat result info to file:{1}".format(processName, invalidResultFile))
-    return (timeFileInfo, fileNotExist)
+        fileHandle2.write("{0}\n".format(f))
+
+
+    fileHandle1.close()
+    fileHandle2.close()
+    exit()
+
+    #logger.info("{0}:{1} lines finish processing".format(processName, lineNum))
+
+
+    #fileHandle = open(statResultFile, "w")
+    
+    #cnt = 0
+    #logger.info("{0}: Start to write stat result info to file:{1}".format(processName, statResultFile))
+    #for(fname, values) in timeFileInfo.iteritems():
+        #cnt = cnt + 1
+        #lineToWrite = values[0] + "#" + values[1] + "#" + values[2] + "#" + fname + "#" + values[3] + "#" + values[4] + "#" + values[5] +  "\n"
+        #fileHandle.write(lineToWrite)
+    #logger.info("{0}: End to write stat result info to file:{1}".format(processName, statResultFile))
+    #fileHandle.close()
+
+    #fileHandle = open(invalidResultFile, "w")
+    #logger.info("{0}: start to write invalid result info to file:{1}".format(processName, invalidResultFile))
+    #for f in fileNotExist:
+        #fileHandle.write("{0}\n".format(f))
+    #fileHandle.close()
+    #logger.info("{0}: End to write stat result info to file:{1}".format(processName, invalidResultFile))
+    #return (timeFileInfo, fileNotExist)
 
 
 def statAllRegularFile(pathGroups, outputDir, fileNamePrefix, processNum = 1):
@@ -848,15 +884,21 @@ def mergePathFiles(outputDir, fileNamePrefix, processNum, level12RegularFiles, o
     for item in level12RegularFiles:
         allPaths.append(item)
 
+    lineNum = 0
     for i in xrange(0,processNum):
         fileName = outputDir + fileNamePrefix + "_{0}".format(i) + ".txt"
         with open(fileName) as f:
             for line in f: 
                 allPaths.append(line)
+                lineNum = lineNum + 1
+                if(lineNum % 100000 == 0):
+                    logger.info("{0} lines finish processing".format(lineNum))
 
         f.close()
 
+    logger.info("{0} lines finish processing".format(lineNum))
     fileHandle = open(outputFilePathName, "w")
+    lineNum = 0
     for item in allPaths:
         if(item[-1] != '\n'):
             fileHandle.write(item + "\n")
@@ -864,9 +906,13 @@ def mergePathFiles(outputDir, fileNamePrefix, processNum, level12RegularFiles, o
             fileHandle.write(item)
 
         fileHandle.flush()
+        lineNum = lineNum + 1
+        if(lineNum % 100000 == 0):
+            logger.info("{0} lines finish processing".format(lineNum))
 
     fileHandle.close()
 
+    logger.info("{0} lines finish processing".format(lineNum))
     return allPaths
 
 
@@ -910,6 +956,7 @@ def divAllPathsToGroups(allPaths, groupNum):
     logger.debug("Group size is: {0}".format(groupSize))
 
     j = 0
+    lineNum = 0
     for i in xrange(0, totalPathNum):
         groups[j].append(allPaths[i])
 
@@ -917,6 +964,12 @@ def divAllPathsToGroups(allPaths, groupNum):
         if(j == groupNum):
             j = 0
 
+        lineNum = lineNum + 1
+        if(lineNum % 100000 == 0):
+            logger.info("{0} lines finish processing".format(lineNum))
+
+    
+    logger.info("{0} lines finish processing".format(lineNum))
     return groups
 
 def genFileSizeRangeDict(classifySize=500, classifyNum=5):
@@ -1271,8 +1324,9 @@ def makeBalanceDirGroups(historyFilePathListFile, tmpOutputDir, processNum, leve
     logger.debug("End to assign new dir group to dirGroups")
     return dirGroups
 
-def getHistoryAllPath(historyAllPathFile):
+def getAllPathFromFile(historyAllPathFile):
     historyAllPaths = []
+    lineNum = 0
     with open(historyAllPathFile) as f:
         for line in f:
             if(line[-1] == "\n"):
@@ -1280,7 +1334,13 @@ def getHistoryAllPath(historyAllPathFile):
             else:
                 filePath = line
             historyAllPaths.append(filePath)
+            lineNum = lineNum + 1
+            if(lineNum % 100000 == 0):
+                logger.info("{0} lines finish processing".format(lineNum))
         f.close()
+
+
+    logger.info("{0} lines finish processing".format(lineNum))
     return historyAllPaths
 
 def getHistoryStatInfo(historyStatFile):
@@ -1386,48 +1446,9 @@ def genIncreasingResultFiles(outputDir, increasingStatFileName, baseTime):
 
 def genReducingResultFiles(outputDir, reducingStatFileName, baseTime):
     genResultFiles(outputDir, reducingStatFileName, "_reducing", baseTime)
-    
-if __name__ == "__main__":
 
-    #genUserFileAccessPeriodInfo("../testdata/stat10.txt", 100, "./tmp/")
-    #exit()
 
-    logger.info("start to analysis directory, current time is: {0}".format(getCurrDateTime()))
-    basetime =getCurrDateTime()
-    parser = argparse.ArgumentParser(description="this program is used to scan all regular file in a dirctory and make some statistic operations")
-    parser.add_argument("-i", "--dir_to_search", action="store", help="the directory to search", required=False)
-    parser.add_argument("-s", "--stat_file_name", action="store", help="name of the linux stat command result file, default[all_stat_result.txt]", default="all_stat_result.txt")
-    parser.add_argument("-d", "--output_dir", action="store", help="the directory to save the output result file, default[./result]", default="./result/")
-    parser.add_argument("-m", "--tmp_dir", action="store", help="the tmpory directory for saving intermediat result file,default[./tmp/]", default="./tmp/")
-    parser.add_argument("-p", "--filename_prefix", action="store", help="the prefix string for the file path file name, default[file_path]", default="file_path")
-    parser.add_argument("-t", "--base_time", action="store", help="the datetime to compare with the last access time, format is: yyyy-mm-dd-hh:mm:ss, default is system current time",default=basetime) 
-    parser.add_argument("-n", "--process_num", action="store", type=int, help="the process number to run, default is 8", default=8)
-    parser.add_argument("-r", "--is_shuffle", action="store", type=int, help="whether to shuffle the dirs depth that >= 2 so as to make a possible blance for  process loading ,default is 0 indicating not to shuffle ", choices=[0,1], default=0)
-    parser.add_argument("-e", "--exclude_dirs", action="append", help="the directories that do not need to be searched, default is []", default=[])
-    parser.add_argument("-o", "--operation", action="store", help="operation to execute", choices=['all', 'gen_file_distribution'], default='all')
-    parser.add_argument("-c", "--classify_size", action="store", type=int, help="size in mb used to classify the result stat info, default is 1024mb", default=1024)
-    parser.add_argument("-g", "--classify_num", action="store", type=int, help="num of classes to generate, default is to generate 2 classes", default=2)
-    parser.add_argument("-x", "--is_used_mpi", action="store", type=int, help="whether to usd mpi process to run, default is 0 indicating not to use mpi", choices=[0,1], default=0)
-    parser.add_argument("-y", "--period_threshold", action="store", type=int, help="int period value used to gen user file period info, default is 100 days", default=100)
-    parser.add_argument("-b", "--previous_path_file", action="store", help="a file path list file that is genenerated in privious scanning, this file is used for a purpose of balance scanning ", default="None")
-    parser.add_argument("-z", "--previous_stat_file", action="store", help="a stat file that is genenerated in privious scanning, this file is used for a purpose of increasing stat operation ", default="None")
-    args = parser.parse_args()
-    logger.info("directory to search:" + str(args.dir_to_search))
-    logger.info("output dir is: " + args.output_dir)
-    logger.info("directories that should not be searched: " + str(args.exclude_dirs))
-    logger.info("date used as base time " + args.base_time)
-    logger.info("operation to execute: " + args.operation)
-    logger.info("intermediate result file output dir is: " + args.tmp_dir)
-    logger.info("process number to run {0}".format(args.process_num))
-    if(args.is_used_mpi == 1):
-        logger.info("is used mpi: yes")
-    else:
-        logger.info("is used mpi: no")
-
-    if(args.previous_path_file != "None"):
-        logger.info("is used balance scanning: yes, history file path list file is: " + args.previous_path_file)
-    else:
-        logger.info("is used balance scanning: no, start a new scanning")
+def scanAll(args):
     op = args.operation
     baseTime = args.base_time
     intermediateResultDir = args.tmp_dir
@@ -1456,13 +1477,14 @@ if __name__ == "__main__":
     """
     if(outputDir[-1] != '/'):
         outputDir = outputDir + "/"
+
     if(intermediateResultDir[-1] != '/'):
         intermediateResultDir = intermediateResultDir + "/"
     mkdir(outputDir)
     mkdir(intermediateResultDir)
 
-    (level1Dirs, level2Dirs) = getLevel12Dirs(dirToSearch)
 
+    (level1Dirs, level2Dirs) = getLevel12Dirs(dirToSearch)
     """
     here we write the level2Dirs to file so that we can use mpi process the search the regular file
     """
@@ -1522,19 +1544,22 @@ if __name__ == "__main__":
         """
         mpiexec -n 180 -f machinefile ./genfilepath ./tmp ./result
         """
-        mpiCommandGenFilePath = "mpiexec -f ./machinefile -n " + str(processNum) + " ./genfilepath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
+        #mpiCommandGenFilePath = "mpiexec -f ./machinefile -n " + str(processNum) + " ./genfilepath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
+        mpiCommandGenFilePath = "mpirun -n " + str(processNum) + " ./genFilePath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
 
         logger.info("mpiCommandGenFilePath = " + mpiCommandGenFilePath)
 
         """
         here we use mpi program to find all regular files by a number of process.
         """
+        logger.info("Start to find all regular files in directory that depth is > 2 by MPI process")
         os.system(mpiCommandGenFilePath)
+        logger.info("End to find all regular files in directory that depth is > 2 by MPI process")
 
     else:
-        logger.info("start to find all regular files in directory that depth is > 2")
+        logger.info("start to find all regular files in directory that depth is > 2 by python process")
         findAllRegularFile(dirGroups, intermediateResultDir,  fileNamePrefix, processNum) 
-        logger.info("end to find all regular files in directory that depth is > 2")
+        logger.info("end to find all regular files in directory that depth is > 2 by python process")
 
     logger.info("sleep for 2 seconds for merging file path files")
     time.sleep(2)
@@ -1559,44 +1584,71 @@ if __name__ == "__main__":
     """
     historyAllPaths = set()
     if(previousFilePathFile != "None"):
-        historyAllPaths = getHistoryAllPath(previousFilePathFile)
+        historyAllPaths = getAllPathFromFile(previousFilePathFile)
         historyAllPaths = set(historyAllPaths)
 
+    logger.info("Start to get current all path info")
     currAllPaths = []
+    lineNum = 0
     for item in allpaths:
         if(item[-1] == "\n"):
             currAllPaths.append(item[0:-1])
         else:
             currAllPaths.append(item)
+        lineNum = lineNum + 1
+	if(lineNum % 100000 == 0):
+	    logger.info("{0} lines finish processing".format(lineNum))
 
-    currAllPaths = set(currAllPaths)
-    reducingFileList = list(historyAllPaths - currAllPaths)
-    increasingFileList = list(currAllPaths - historyAllPaths)
+    logger.info("{0} lines finish processing".format(lineNum))
 
-    reducingfilename = intermediateResultDir + "reducingfile.txt"
-    increasingfilename = intermediateResultDir + "increasingfile.txt"
-    fileHandle1 = open(reducingfilename, "w")
-    fileHandle2 = open(increasingfilename, "w")
+    logger.info("End to get current all path info, path count: {0}".format(len(currAllPaths)))
 
-    fileHandle1.write("reducing file num: {0}\n\n".format(len(reducingFileList)))
-    for item in reducingFileList:
-        fileHandle1.write(item + "\n")
+    increasingFileList = []
+    if(previousFilePathFile != "None"):
+        currAllPaths = set(currAllPaths)
+        logger.info("Start to get reducing file list")
+        reducingFileList = list(historyAllPaths - currAllPaths)
+        logger.info("End to get reducing file list, file count: {0}".format(reducingFileList))
+        logger.info("Start to get increasing file list")
+        increasingFileList = list(currAllPaths - historyAllPaths)
+        logger.info("End to get increasing file list, file count: {0}".format(len(increasingFileList)))
 
-    fileHandle1.close()
+        reducingfilename = intermediateResultDir + "reducingfile.txt"
+        increasingfilename = intermediateResultDir + "increasingfile.txt"
+        fileHandle1 = open(reducingfilename, "w")
+        fileHandle2 = open(increasingfilename, "w")
 
-    fileHandle2.write("increasing file num: {0}\n\n".format(len(increasingFileList)))
-    for item in increasingFileList:
-        fileHandle2.write(item + "\n")
-    fileHandle2.close()
+        fileHandle1.write("reducing file num: {0}\n\n".format(len(reducingFileList)))
+        lineNum = 0
+        for item in reducingFileList:
+            fileHandle1.write(item + "\n")
+            lineNum = lineNum + 1
+            if(lineNum % 100000 == 0):
+                logger.info("{0} lines finish processing".format(lineNum))
+
+        fileHandle1.close()
+        logger.info("{0} lines finish processing".format(lineNum))
+
+        fileHandle2.write("increasing file num: {0}\n\n".format(len(increasingFileList)))
+        lineNum = 0
+        for item in increasingFileList:
+            fileHandle2.write(item + "\n")
+            lineNum = lineNum + 1
+            if(lineNum % 100000 == 0):
+                logger.info("{0} lines finish processing".format(lineNum))
+        fileHandle2.close()
+        logger.info("{0} lines finish processing".format(lineNum))
+        """
+        end to get the increasing file list and reducing file list
+        """
     """
-    end to get the increasing file list and reducing file list
+    get the path groups for stat operation based on the increasing file list or current all path
     """
-    #pathGroups = divallpathstogroups(allpaths, processNum)
-    """
-    get the path groups for stat operation based on the increasing file list
-    """
-    pathGroups = divAllPathsToGroups(increasingFileList, processNum)
-    
+    if(previousFilePathFile != "None"):
+        pathGroups = divAllPathsToGroups(increasingFileList, processNum)
+    else:
+        pathGroups = divAllPathsToGroups(currAllPaths, processNum)
+
     if(isUsedMPI == 1):
         """
         we write item in pathGroups to each file ,so that for every mpi process to do stat operation
@@ -1605,27 +1657,39 @@ if __name__ == "__main__":
             group = pathGroups[i]
             fname = intermediateResultDir + "path_list_" + str(i) + ".txt"
             fileHandle = open(fname, "w")
+            lineNum = 0
             for item in group:
                 if(item[-1] == '\n'):
                     fileHandle.write(item)
                 else:
                     fileHandle.write(item + "\n")
+                lineNum = lineNum + 1
+                if(lineNum % 100000 == 0):
+                    logger.info("Group[{0}]: {1} lines finish processing".format(i, lineNum))
 
             fileHandle.close()
+
+            logger.info("Group[{0}]: {1} lines finish processing".format(i, lineNum))
+
 
         """
         mpiexec -f machinefile -n 24 ./statfilepath tmp tmp huabin
         """
-        mpicommandstatfilepath = "mpiexec -f ./machinefile -n " + str(processNum) + " ./statfilepath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
+        #mpicommandstatfilepath = "mpiexec -f ./machinefile -n " + str(processNum) + " ./statfilepath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
+        mpicommandstatfilepath = "mpirun -n " + str(processNum) + " ./statFilePath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
 
         logger.info("mpicommandstatfilepath = " + mpicommandstatfilepath)
 
         """
         here we use mpi program to stat all regular files by a number of process.
         """
+        logger.info("Start to stat regular files by mpi process")
         os.system(mpicommandstatfilepath)
+        logger.info("End to stat regular files by mpi process")
     else:
+        logger.info("Start to stat regular files by python process")
         statAllRegularFile(pathGroups, intermediateResultDir, fileNamePrefix, processNum)
+        logger.info("End to stat regular files by python process")
 
     outputStatFileName = outputDir + args.stat_file_name 
     mergeStatFiles(intermediateResultDir, "stat", processNum, outputStatFileName)
@@ -1645,3 +1709,529 @@ if __name__ == "__main__":
 
     genFinalResultFiles(outputDir, outputStatFileName, baseTime, periodThreshold)
     exceptFileHandle.close()
+
+def scanFromPathFileList(args):
+    op = args.operation
+    baseTime = args.base_time
+    intermediateResultDir = args.tmp_dir
+    fileNamePrefix = args.filename_prefix
+    outputDir = args.output_dir
+    processNum = args.process_num
+    dirToSearch = args.dir_to_search
+    isShuffle = args.is_shuffle
+    classifyNum = args.classify_num
+    classifySize = args.classify_size
+    isUsedMPI = args.is_used_mpi
+    previousFilePathFile = args.previous_path_file
+    previousStatFile = args.previous_stat_file
+    periodThreshold = args.period_threshold
+    startedPathFileName = args.started_path_list_file
+
+    if(startedPathFileName == "None"):
+       logger.error("Please use -j to specify a started path file list")
+       exit()
+
+    
+    if(previousFilePathFile != "None" and previousStatFile == "None"):
+        logger.error("History path file and stat file must be specified simutaneously, using -b and -z to specify!!!")
+        exit()
+
+    if(previousFilePathFile == "None" and previousStatFile != "None"):
+        logger.error("History path file and stat file must be specified simutaneously, using -b and -z to specify!!!")
+        exit()
+
+    """
+    Append slash to the end of outputDir and intermediateResultDir
+    """
+    if(outputDir[-1] != '/'):
+        outputDir = outputDir + "/"
+
+    if(intermediateResultDir[-1] != '/'):
+        intermediateResultDir = intermediateResultDir + "/"
+    mkdir(outputDir)
+    mkdir(intermediateResultDir)
+
+
+    #level12RegularFiles = getLevel12RegularFiles(dirToSearch)
+    #logger.info("regular files in level 1&2 directory: " + str(level12RegularFiles))
+
+    #logger.info("start to merge file path files")
+    #outputPathFileName = outputDir + "all_file_path_result.txt"
+    #allpaths = mergePathFiles(intermediateResultDir, fileNamePrefix, processNum, level12RegularFiles, outputPathFileName)
+    #logger.info("end to merge file path files")
+
+    logger.info("Start to get all path from file")
+    currAllPaths = getAllPathFromFile(startedPathFileName)
+    logger.info("End to get all path from file")
+
+    """
+    here we get the history all path info to get the reducing file list and increasing file list
+    """
+    historyAllPaths = set()
+    if(previousFilePathFile != "None"):
+        historyAllPaths = getAllPathFromFile(previousFilePathFile)
+        historyAllPaths = set(historyAllPaths)
+    
+    """
+    We do following reducing/increasing operation in incremental scanning mode
+    """
+    increasingFileList = []
+    if(previousFilePathFile != "None"):
+        currAllPaths = set(currAllPaths)
+        logger.info("Start to get reducing file list")
+        reducingFileList = list(historyAllPaths - currAllPaths)
+        logger.info("End to get reducing file list, file count: {0}".format(reducingFileList))
+        logger.info("Start to get increasing file list")
+        increasingFileList = list(currAllPaths - historyAllPaths)
+        logger.info("End to get increasing file list, file count: {0}".format(len(increasingFileList)))
+
+        reducingfilename = intermediateResultDir + "reducingfile.txt"
+        increasingfilename = intermediateResultDir + "increasingfile.txt"
+        fileHandle1 = open(reducingfilename, "w")
+        fileHandle2 = open(increasingfilename, "w")
+
+        fileHandle1.write("reducing file num: {0}\n\n".format(len(reducingFileList)))
+        lineNum = 0
+        for item in reducingFileList:
+            fileHandle1.write(item + "\n")
+            lineNum = lineNum + 1
+            if(lineNum % 100000 == 0):
+                logger.info("{0} lines finish processing".format(lineNum))
+
+        fileHandle1.close()
+        logger.info("{0} lines finish processing".format(lineNum))
+
+        fileHandle2.write("increasing file num: {0}\n\n".format(len(increasingFileList)))
+        lineNum = 0
+        for item in increasingFileList:
+            fileHandle2.write(item + "\n")
+            lineNum = lineNum + 1
+            if(lineNum % 100000 == 0):
+                logger.info("{0} lines finish processing".format(lineNum))
+        fileHandle2.close()
+        logger.info("{0} lines finish processing".format(lineNum))
+        """
+        end to get the increasing file list and reducing file list
+        """
+
+    if(previousFilePathFile != "None"):
+        pathGroups = divAllPathsToGroups(increasingFileList, processNum)
+    else:
+        pathGroups = divAllPathsToGroups(currAllPaths, processNum)
+    
+    if(isUsedMPI == 1):
+        """
+        we write item in pathGroups to each file ,so that for every mpi process to do stat operation
+        """
+        for i in xrange(processNum):
+            group = pathGroups[i]
+            fname = intermediateResultDir + "path_list_" + str(i) + ".txt"
+            fileHandle = open(fname, "w")
+            lineNum = 0
+            for item in group:
+                if(item[-1] == '\n'):
+                    fileHandle.write(item)
+                else:
+                    fileHandle.write(item + "\n")
+                lineNum = lineNum + 1
+                if(lineNum % 100000 == 0):
+                    logger.info("Group[{0}]: {1} lines finish processing".format(i, lineNum))
+
+            fileHandle.close()
+
+            logger.info("Group[{0}]: {1} lines finish processing".format(i, lineNum))
+
+
+        """
+        mpiexec -f machinefile -n 24 ./statfilepath tmp tmp huabin
+        """
+        #mpicommandstatfilepath = "mpiexec -f ./machinefile -n " + str(processNum) + " ./statfilepath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
+        mpicommandstatfilepath = "mpirun -n " + str(processNum) + " ./statFilePath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
+
+        logger.info("mpicommandstatfilepath = " + mpicommandstatfilepath)
+
+        """
+        here we use mpi program to stat all regular files by a number of process.
+        """
+        logger.info("Start to stat file info by mpi  process")
+        os.system(mpicommandstatfilepath)
+        logger.info("End to stat file info by mpi process")
+    else: #Using path process to stat all regular file
+        logger.info("Start to stat file info by python process")
+        statAllRegularFile(pathGroups, intermediateResultDir, fileNamePrefix, processNum)
+        logger.info("End to stat file info by python process")
+
+    outputStatFileName = outputDir + args.stat_file_name 
+    mergeStatFiles(intermediateResultDir, "stat", processNum, outputStatFileName)
+    """
+    mergeStatFiles merges the stat info that are increased, so here outputStatFileName is pointed to the file that contains the increased file info
+    """
+    increasingStatFileName = outputStatFileName
+    logger.info("sleep 1 second then to generate various result file")
+    time.sleep(1)
+    """
+    here we need to update stat result file based on increasingFileList and historystatinfo
+    """
+    if(previousFilePathFile != "None" and previousStatFile != "None"):
+        (outputStatFileName, reducingStatFileName) = mergeWithHistoryStatFile(previousStatFile, increasingFileList, reducingFileList, outputDir)
+        genIncreasingResultFiles(outputDir, increasingStatFileName, baseTime)
+        genReducingResultFiles(outputDir, reducingStatFileName, baseTime)
+        genFinalResultFiles(outputDir, outputStatFileName, baseTime, periodThreshold)
+
+    else:
+        genFinalResultFiles(outputDir, outputStatFileName, baseTime, periodThreshold)
+    exceptFileHandle.close()
+
+def scanFromStatFileList(args):
+    op = args.operation
+    baseTime = args.base_time
+    intermediateResultDir = args.tmp_dir
+    fileNamePrefix = args.filename_prefix
+    outputDir = args.output_dir
+    processNum = args.process_num
+    dirToSearch = args.dir_to_search
+    isShuffle = args.is_shuffle
+    classifyNum = args.classify_num
+    classifySize = args.classify_size
+    isUsedMPI = args.is_used_mpi
+    previousFilePathFile = args.previous_path_file
+    previousStatFile = args.previous_stat_file
+    periodThreshold = args.period_threshold
+    startedStatFileName = args.started_stat_file
+
+
+    if(startedStatFileName == "None"):
+       logger.error("Please use -k to specify a started stat file")
+       exit()
+
+    if(previousFilePathFile != "None" and previousStatFile == "None"):
+        logger.error("History path file and stat file must be specified simutaneously, using -b and -z to specify!!!")
+        exit()
+
+    if(previousFilePathFile == "None" and previousStatFile != "None"):
+        logger.error("History path file and stat file must be specified simutaneously, using -b and -z to specify!!!")
+        exit()
+
+    """
+    Append slash to the end of outputDir and intermediateResultDir
+    """
+    if(outputDir[-1] != '/'):
+        outputDir = outputDir + "/"
+
+    if(intermediateResultDir[-1] != '/'):
+        intermediateResultDir = intermediateResultDir + "/"
+    mkdir(outputDir)
+    mkdir(intermediateResultDir)
+
+    if(previousFilePathFile != "None" and previousStatFile != "None"):
+        (outputStatFileName, reducingStatFileName) = mergeWithHistoryStatFile(previousStatFile, increasingFileList, reducingFileList, outputDir)
+        genIncreasingResultFiles(outputDir, increasingStatFileName, baseTime)
+        genReducingResultFiles(outputDir, reducingStatFileName, baseTime)
+        genFinalResultFiles(outputDir, outputStatFileName, baseTime, periodThreshold)
+    else:
+        outputStatFileName = startedStatFileName
+        genFinalResultFiles(outputDir, outputStatFileName, baseTime, periodThreshold)
+    exceptFileHandle.close()
+pass
+
+
+if __name__ == "__main__":
+
+    logger.info("start to analysis directory, current time is: {0}".format(getCurrDateTime()))
+    basetime =getCurrDateTime()
+    parser = argparse.ArgumentParser(description="this program is used to scan all regular file in a dirctory and make some statistic operations")
+    parser.add_argument("-i", "--dir_to_search", action="store", help="the directory to search", required=False)
+    parser.add_argument("-s", "--stat_file_name", action="store", help="name of the linux stat command result file, default[all_stat_result.txt]", default="all_stat_result.txt")
+    parser.add_argument("-d", "--output_dir", action="store", help="the directory to save the output result file, default[./result]", default="./result/")
+    parser.add_argument("-m", "--tmp_dir", action="store", help="the tmpory directory for saving intermediat result file,default[./tmp/]", default="./tmp/")
+    parser.add_argument("-p", "--filename_prefix", action="store", help="the prefix string for the file path file name, default[file_path]", default="file_path")
+    parser.add_argument("-t", "--base_time", action="store", help="the datetime to compare with the last access time, format is: yyyy-mm-dd-hh:mm:ss, default is system current time",default=basetime) 
+    parser.add_argument("-n", "--process_num", action="store", type=int, help="the process number to run, default is 8", default=8)
+    parser.add_argument("-r", "--is_shuffle", action="store", type=int, help="whether to shuffle the dirs depth that >= 2 so as to make a possible blance for  process loading ,default is 0 indicating not to shuffle ", choices=[0,1], default=0)
+    parser.add_argument("-e", "--exclude_dirs", action="append", help="the directories that do not need to be searched, default is []", default=[])
+    parser.add_argument("-o", "--operation", action="store", help="operation to execute", choices=['all', 'start_from_path_list_file', 'start_from_stat_file'], default='all')
+    parser.add_argument("-c", "--classify_size", action="store", type=int, help="size in mb used to classify the result stat info, default is 1024mb", default=1024)
+    parser.add_argument("-g", "--classify_num", action="store", type=int, help="num of classes to generate, default is to generate 2 classes", default=2)
+    parser.add_argument("-x", "--is_used_mpi", action="store", type=int, help="whether to usd mpi process to run, default is 0 indicating not to use mpi", choices=[0,1], default=0)
+    parser.add_argument("-y", "--period_threshold", action="store", type=int, help="int period value used to gen user file period info, default is 100 days", default=100)
+    parser.add_argument("-b", "--previous_path_file", action="store", help="a file path list file that is genenerated in privious scanning, this file is used for a purpose of balance scanning ", default="None")
+    parser.add_argument("-z", "--previous_stat_file", action="store", help="a stat file that is genenerated in privious scanning, this file is used for a purpose of increasing stat operation ", default="None")
+    parser.add_argument("-j", "--started_path_list_file", action="store", help="a file path list file that is already generated ", default="None")
+    parser.add_argument("-k", "--started_stat_file", action="store", help="a stat file that is already generated", default="None")
+    args = parser.parse_args()
+    logger.info("directory to search:" + str(args.dir_to_search))
+    logger.info("output dir is: " + args.output_dir)
+    logger.info("directories that should not be searched: " + str(args.exclude_dirs))
+    logger.info("date used as base time " + args.base_time)
+    logger.info("operation to execute: " + args.operation)
+    logger.info("intermediate result file output dir is: " + args.tmp_dir)
+    logger.info("process number to run {0}".format(args.process_num))
+    if(args.is_used_mpi == 1):
+        logger.info("is used mpi: yes")
+    else:
+        logger.info("is used mpi: no")
+
+    if(args.previous_path_file != "None"):
+        logger.info("is used balance scanning: yes, history file path list file is: " + args.previous_path_file)
+    else:
+        logger.info("is used balance scanning: no, start a new scanning")
+    op = args.operation
+    baseTime = args.base_time
+    intermediateResultDir = args.tmp_dir
+    fileNamePrefix = args.filename_prefix
+    outputDir = args.output_dir
+    processNum = args.process_num
+    dirToSearch = args.dir_to_search
+    isShuffle = args.is_shuffle
+    classifyNum = args.classify_num
+    classifySize = args.classify_size
+    isUsedMPI = args.is_used_mpi
+    previousFilePathFile = args.previous_path_file
+    previousStatFile = args.previous_stat_file
+    periodThreshold = args.period_threshold
+
+    if(previousFilePathFile != "None" and previousStatFile == "None"):
+        logger.error("History path file and stat file must be specified simutaneously, using -b and -z to specify!!!")
+        exit()
+
+    if(previousFilePathFile == "None" and previousStatFile != "None"):
+        logger.error("History path file and stat file must be specified simutaneously, using -b and -z to specify!!!")
+        exit()
+
+    """
+    Append slash to the end of outputDir and intermediateResultDir
+    """
+    if(outputDir[-1] != '/'):
+        outputDir = outputDir + "/"
+
+    if(intermediateResultDir[-1] != '/'):
+        intermediateResultDir = intermediateResultDir + "/"
+    mkdir(outputDir)
+    mkdir(intermediateResultDir)
+
+
+
+    if(op == "all"):
+        scanAll(args)
+    elif(op == "start_from_path_list_file"):
+        scanFromPathFileList(args)
+    elif(op == "start_from_stat_file"):
+        scanFromStatFileList(args)
+
+    exit()
+
+
+    #(level1Dirs, level2Dirs) = getLevel12Dirs(dirToSearch)
+
+    #"""
+    #here we write the level2Dirs to file so that we can use mpi process the search the regular file
+    #"""
+    #logger.info("start to write level 2 dirs to file level2Dirs.txt")
+    #fileHandle = open("level2Dirs.txt", "w");
+    #for item in level2Dirs:
+        #fileHandle.write(item + "\n");
+    #fileHandle.close()
+    #logger.info("end to write level 2 dirs to file level2Dirs.txt")
+
+    #level12RegularFiles = getLevel12RegularFiles(dirToSearch)
+    #logger.info("regular files in level 1&2 directory: " + str(level12RegularFiles))
+
+    #if(isShuffle == 1):
+        #logger.info("dir depth that >= 2 before shuffle: " + str(level2Dirs))
+        #shuffle(level2Dirs)
+        #logger.info("dir depth that >= 2 after shuffle: " + str(level2Dirs))
+
+    #dirGroups = divDirsToGroups(level2Dirs, processNum)  
+    #"""
+    #if we have previous scanned file path list file, then we should make a balance dir dividing
+    #"""
+    #if(previousFilePathFile != "None"):
+        #logger.info("start to make a balance dir dividing based on previous scanned file: " + previousFilePathFile)
+        #dirGroups = makeBalanceDirGroups(previousFilePathFile, intermediateResultDir, processNum, level2Dirs)
+        #logger.info("end to make a balance dir dividing based on previous scanned file: " + previousFilePathFile)
+    #logger.info("number of leve2dirs: " + str(len(level2Dirs)))
+    #logger.info("dir groups result:")
+    #dirgroupresultfile = intermediateResultDir + "dirgroup.txt"
+
+    #fileHandle = open(dirgroupresultfile, "w")
+    #index = 0
+    #for item in dirGroups:
+        #logger.info(item)
+        #fileHandle.write("process {0} dir list: len: {1}\n\n".format(index, len(item)))
+        #for v in item:
+            #fileHandle.write(v + "\n")
+        
+        #fileHandle.write("\n")
+        #index = index + 1
+
+    #fileHandle.close()
+
+    #if(isUsedMPI == 1):
+        #"""
+        #write dir group to each file so that each mpi process can read its dir file
+        #we save all dirs file and file path files to the intermediate result dir
+        #"""
+        #for i in xrange(processNum):
+            #group = dirGroups[i]
+            #fname = intermediateResultDir + "dirs_" + str(i) + ".txt"
+            #fileHandle = open(fname, "w")
+            #for item in group:
+                #fileHandle.write(item + "\n")
+            #fileHandle.close()
+
+        #"""
+        #mpiexec -n 180 -f machinefile ./genfilepath ./tmp ./result
+        #"""
+        ##mpiCommandGenFilePath = "mpiexec -f ./machinefile -n " + str(processNum) + " ./genfilepath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
+        #mpiCommandGenFilePath = "mpirun -n " + str(processNum) + " ./genFilePath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
+
+        #logger.info("mpiCommandGenFilePath = " + mpiCommandGenFilePath)
+
+        #"""
+        #here we use mpi program to find all regular files by a number of process.
+        #"""
+        #os.system(mpiCommandGenFilePath)
+
+    #else:
+        #logger.info("start to find all regular files in directory that depth is > 2")
+        #findAllRegularFile(dirGroups, intermediateResultDir,  fileNamePrefix, processNum) 
+        #logger.info("end to find all regular files in directory that depth is > 2")
+
+    #logger.info("sleep for 2 seconds for merging file path files")
+    #time.sleep(2)
+    #logger.info("start to merge file path files")
+    #outputPathFileName = outputDir + "all_file_path_result.txt"
+    #allpaths = mergePathFiles(intermediateResultDir, fileNamePrefix, processNum, level12RegularFiles, outputPathFileName)
+    #logger.info("end to merge file path files")
+
+    #"""
+    #we append the regular files in level 1 and 2 dir to the first process file path file
+    #"""
+    #fileHandle = open(intermediateResultDir + fileNamePrefix + "_0.txt", "a+")
+    #for item in level12RegularFiles:
+        #fileHandle.write(item + "\n")
+    #fileHandle.close()
+
+
+    #logger.info("sleep 2 seconds and then to stat file ")
+    #time.sleep(2)
+    #"""
+    #here we get the reducing file list and increasing file list
+    #"""
+    #historyAllPaths = set()
+    #if(previousFilePathFile != "None"):
+        #historyAllPaths = getAllPathFromFile(previousFilePathFile)
+        #historyAllPaths = set(historyAllPaths)
+
+    #logger.info("Start to get current all path info")
+    #currAllPaths = []
+    #lineNum = 0
+    #for item in allpaths:
+        #if(item[-1] == "\n"):
+            #currAllPaths.append(item[0:-1])
+        #else:
+            #currAllPaths.append(item)
+        #lineNum = lineNum + 1
+	#if(lineNum % 100000 == 0):
+		#logger.info("{0} lines finish processing".format(lineNum))
+
+    #logger.info("{0} lines finish processing".format(lineNum))
+
+    #logger.info("End to get current all path info, path count: {0}".format(len(currAllPaths)))
+    #currAllPaths = set(currAllPaths)
+    #logger.info("Start to get reducing file list")
+    #reducingFileList = list(historyAllPaths - currAllPaths)
+    #logger.info("End to get reducing file list, file count: {0}".format(reducingFileList))
+    #logger.info("Start to get increasing file list")
+    #increasingFileList = list(currAllPaths - historyAllPaths)
+    #logger.info("End to get increasing file list, file count: {0}".format(len(increasingFileList)))
+
+    #reducingfilename = intermediateResultDir + "reducingfile.txt"
+    #increasingfilename = intermediateResultDir + "increasingfile.txt"
+    #fileHandle1 = open(reducingfilename, "w")
+    #fileHandle2 = open(increasingfilename, "w")
+
+    #fileHandle1.write("reducing file num: {0}\n\n".format(len(reducingFileList)))
+    #lineNum = 0
+    #for item in reducingFileList:
+        #fileHandle1.write(item + "\n")
+        #lineNum = lineNum + 1
+        #if(lineNum % 100000 == 0):
+            #logger.info("{0} lines finish processing".format(lineNum))
+
+    #fileHandle1.close()
+    #logger.info("{0} lines finish processing".format(lineNum))
+
+    #fileHandle2.write("increasing file num: {0}\n\n".format(len(increasingFileList)))
+    #lineNum = 0
+    #for item in increasingFileList:
+        #fileHandle2.write(item + "\n")
+        #lineNum = lineNum + 1
+        #if(lineNum % 100000 == 0):
+            #logger.info("{0} lines finish processing".format(lineNum))
+    #fileHandle2.close()
+    #logger.info("{0} lines finish processing".format(lineNum))
+    #"""
+    #end to get the increasing file list and reducing file list
+    #"""
+    ##pathGroups = divallpathstogroups(allpaths, processNum)
+    #"""
+    #get the path groups for stat operation based on the increasing file list
+    #"""
+    #pathGroups = divAllPathsToGroups(increasingFileList, processNum)
+    
+    #if(isUsedMPI == 1):
+        #"""
+        #we write item in pathGroups to each file ,so that for every mpi process to do stat operation
+        #"""
+        #for i in xrange(processNum):
+            #group = pathGroups[i]
+            #fname = intermediateResultDir + "path_list_" + str(i) + ".txt"
+            #fileHandle = open(fname, "w")
+
+            #lineNum = 0
+            #for item in group:
+                #if(item[-1] == '\n'):
+                    #fileHandle.write(item)
+                #else:
+                    #fileHandle.write(item + "\n")
+                #lineNum = lineNum + 1
+                #if(lineNum % 100000 == 0):
+                    #logger.info("Group[{0}]: {1} lines finish processing".format(i, lineNum))
+
+            #fileHandle.close()
+
+            #logger.info("Group[{0}]: {1} lines finish processing".format(i, lineNum))
+        #"""
+        #mpiexec -f machinefile -n 24 ./statfilepath tmp tmp huabin
+        #"""
+        ##mpicommandstatfilepath = "mpiexec -f ./machinefile -n " + str(processNum) + " ./statfilepath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
+        #mpicommandstatfilepath = "mpirun -n " + str(processNum) + " ./statFilePath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
+
+        #logger.info("mpicommandstatfilepath = " + mpicommandstatfilepath)
+
+        #"""
+        #here we use mpi program to stat all regular files by a number of process.
+        #"""
+        #os.system(mpicommandstatfilepath)
+    #else:
+        #statAllRegularFile(pathGroups, intermediateResultDir, fileNamePrefix, processNum)
+
+    #outputStatFileName = outputDir + args.stat_file_name 
+    #mergeStatFiles(intermediateResultDir, "stat", processNum, outputStatFileName)
+    #"""
+    #mergeStatFiles merges the stat info that are increased, so here outputStatFileName is pointed to the file that contains the increased file info
+    #"""
+    #increasingStatFileName = outputStatFileName
+    #logger.info("sleep 1 second then to generate various result file")
+    #time.sleep(1)
+    #"""
+    #here we need to update stat result file based on increasingFileList and historystatinfo
+    #"""
+    #if(previousFilePathFile != "None" and previousStatFile != "None"):
+        #(outputStatFileName, reducingStatFileName) = mergeWithHistoryStatFile(previousStatFile, increasingFileList, reducingFileList, outputDir)
+        #genIncreasingResultFiles(outputDir, increasingStatFileName, baseTime)
+        #genReducingResultFiles(outputDir, reducingStatFileName, baseTime)
+
+    #genFinalResultFiles(outputDir, outputStatFileName, baseTime, periodThreshold)
+    #exceptFileHandle.close()
