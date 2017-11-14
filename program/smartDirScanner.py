@@ -282,7 +282,7 @@ def genUserFileAccessPeriodInfo(statFileName, periodThreshold, outputDir="./"):
     with open(statFileName) as f:
         for line in f:
             line       = line[0:-1]
-            metaInfo   = line.split('#')
+            metaInfo   = line.split('#+#')
             accessTime = metaInfo[1]
             fileName   = metaInfo[3]
             userName   = metaInfo[4]
@@ -425,7 +425,7 @@ def genGroupFileAccessPeriodInfo(statFileName, periodThreshold, outputDir="./"):
     with open(statFileName) as f:
         for line in f:
             line       = line[0:-1]
-            metaInfo   = line.split('#')
+            metaInfo   = line.split('#+#')
             accessTime = metaInfo[1]
             fileName   = metaInfo[3]
             groupName   = metaInfo[5]
@@ -618,7 +618,7 @@ def genTypeTypePeriod2NumSize(inputFileName, outputTypeTimePeriod2FileSizeFileNa
     with open(inputFileName) as f:
         for line in f: 
             lineNum = lineNum + 1
-            items = line.split('#')            
+            items = line.split('#+#')            
             fileLastAccessTime = items[1]
             fname = items[3]
             fileSize = items[-1]
@@ -691,7 +691,7 @@ def gen_user_grp_usage(filename, outputUser2UsedSizeFile, outputGrp2UsedSizeFile
     with open(filename) as f:
         for line in f: 
             lineNum = lineNum + 1
-            items = line.split('#')
+            items = line.split('#+#')
             fileSize = items[-1]
             grp = items[-2]            
             username = items[-3]
@@ -826,7 +826,7 @@ def getStatInfo(pathGroup, statResultFile, invalidResultFile, processName):
         """
         if(len(timeFileInfo) == 5000):
             for(fname, values) in timeFileInfo.iteritems():
-                lineToWrite = values[0] + "#" + values[1] + "#" + values[2] + "#" + fname + "#" + values[3] + "#" + values[4] + "#" + values[5] +  "\n"
+                lineToWrite = values[0] + "#+#" + values[1] + "#+#" + values[2] + "#+#" + fname + "#+#" + values[3] + "#+#" + values[4] + "#+#" + values[5] +  "\n"
                 fileHandle1.write(lineToWrite)
 
             timeFileInfo.clear()
@@ -839,7 +839,7 @@ def getStatInfo(pathGroup, statResultFile, invalidResultFile, processName):
 
 
     for(fname, values) in timeFileInfo.iteritems():
-        lineToWrite = values[0] + "#" + values[1] + "#" + values[2] + "#" + fname + "#" + values[3] + "#" + values[4] + "#" + values[5] +  "\n"
+        lineToWrite = values[0] + "#+#" + values[1] + "#+#" + values[2] + "#+#" + fname + "#+#" + values[3] + "#+#" + values[4] + "#+#" + values[5] +  "\n"
         fileHandle1.write(lineToWrite)
 
     for f in fileNotExist:
@@ -859,7 +859,7 @@ def getStatInfo(pathGroup, statResultFile, invalidResultFile, processName):
     #logger.info("{0}: Start to write stat result info to file:{1}".format(processName, statResultFile))
     #for(fname, values) in timeFileInfo.iteritems():
         #cnt = cnt + 1
-        #lineToWrite = values[0] + "#" + values[1] + "#" + values[2] + "#" + fname + "#" + values[3] + "#" + values[4] + "#" + values[5] +  "\n"
+        #lineToWrite = values[0] + "#+#" + values[1] + "#+#" + values[2] + "#+#" + fname + "#+#" + values[3] + "#+#" + values[4] + "#+#" + values[5] +  "\n"
         #fileHandle.write(lineToWrite)
     #logger.info("{0}: End to write stat result info to file:{1}".format(processName, statResultFile))
     #fileHandle.close()
@@ -1137,7 +1137,7 @@ def genFileSizeRangeDistribution(statInfoFile, classifySize=500, classifyNum=5, 
     with open(statInfoFile) as f:
         for line in f: 
             lineNum = lineNum + 1
-            items = line.split('#')            
+            items = line.split('#+#')            
             fileLastAccessTime = items[1]
             fname = items[3]
             fileSize = items[-1]
@@ -1357,7 +1357,7 @@ def getHistoryStatInfo(historyStatFile):
             if(line[-1] == "\n"):
                 line = line[0:-1]
             try:
-                (m, a, c, f, u, g, s) = line.split('#')
+                (m, a, c, f, u, g, s) = line.split('#+#')
             except Exception as exception:
                 logger.error("Split stat info string error, there maybe too many # in stat info string:{0}:{1}".format(line, str(exception)))
                 traceback.print_exc(file=sys.stdout)
@@ -1399,7 +1399,7 @@ def mergeWithHistoryStatFile(historyStatFile, increasingFileList, reducingFileLi
     for (index, fn) in enumerate(reducingFileList):
         if(histStatInfoDict.has_key(fn)):
             v = histStatInfoDict[fn]
-            reducingFileInfo = v[0] + "#" + v[1] + "#" + v[2] + "#" + fn + "#" +v[3] + "#" + v[4] + "#" + v[5]
+            reducingFileInfo = v[0] + "#+#" + v[1] + "#+#" + v[2] + "#+#" + fn + "#+#" +v[3] + "#+#" + v[4] + "#+#" + v[5]
             reducingFileStatInfo.append(reducingFileInfo)
             del histStatInfoDict[fn]
         if((index + 1) % 10000 == 0):
@@ -1415,7 +1415,7 @@ def mergeWithHistoryStatFile(historyStatFile, increasingFileList, reducingFileLi
 
     fileHandle = open(finalStatFile, "w")
     for k, v in histStatInfoDict.iteritems():
-        item = v[0] + "#" + v[1] + "#" + v[2] + "#" + k + "#" +v[3] + "#" + v[4] + "#" + v[5]
+        item = v[0] + "#+#" + v[1] + "#+#" + v[2] + "#+#" + k + "#+#" +v[3] + "#+#" + v[4] + "#+#" + v[5]
         fileHandle.write(item + "\n")
     fileHandle.close()
 
