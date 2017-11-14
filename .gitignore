@@ -13,3 +13,7 @@ tags
 *.orig
 script/old_src/
 data/
+mpich
+mpich/*
+tmp*
+ShareEM

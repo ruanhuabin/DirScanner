@@ -19,4 +19,16 @@
 
 set -o nounset                              # Treat unset variables as an error
 rm -rf scaner*.log
-python smartDirScanner.py -i /usr -d result5 -m tmp5 -b result/all_file_path_result.txt
+
+if [ -d result2 ]
+then
+    echo "Directory [result2] is exist, start to delete"
+    rm -rf result2/*.txt
+fi
+
+if [ -d tmp2 ]
+then
+    echo "Directory [tmp2] is exist, start to delete"
+    rm -rf tmp2/*.txt
+fi
+python smartDirScanner.py -i ../ShareEM/ -n 20 -x 1 -d result2 -m tmp2

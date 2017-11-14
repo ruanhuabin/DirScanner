@@ -18,7 +18,7 @@
 // should only occur at major releases (e.g., version 3 to 4)
 #ifdef __GNUC__ 
 # if __GNUC__ >= 4 
-#  if __GNUC_MINOR__ > 2 && 4 == 2 
+#  if __GNUC_MINOR__ > 2 && 8 == 2 
 #  error 'Please use the same version of GCC and g++ for compiling MPICH and user MPI programs'
 #  endif
 # endif     
