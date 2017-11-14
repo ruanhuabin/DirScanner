@@ -811,7 +811,7 @@ def getStatInfo(pathGroup, statResultFile, invalidResultFile, processName):
             except Exception as exception:
                 errorCnt = errorCnt + 1
                 if(errorCnt % 10000 == 0):
-                    logger.info("{0}: {1}-th file with exception: {2}, set it owner to {3}, grp to {4}".format(processName, errorCnt, fname, "unknow_user_" + str(statInfo.st_uid), "unknow_grp_" + str(statInfo.st_gid)))
+                    logger.warn("{0}: {1}-th file with exception: {2}, set it owner to {3}, grp to {4}".format(processName, errorCnt, fname, "unknow_user_" + str(statInfo.st_uid), "unknow_grp_" + str(statInfo.st_gid)))
                     logger.warn("{0}:{1}:Exception Detail: {2}".format(processName, fname, str(exception)))
                     traceback.print_exc(file=sys.stdout)
                 timeFileInfo[fname] = (modifyTime, accessTime, changeTime, "unknow_user_" + str(statInfo.st_uid), "unknow_grp_" + str(statInfo.st_gid), fileSize)
