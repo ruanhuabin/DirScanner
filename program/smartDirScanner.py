@@ -1565,7 +1565,8 @@ def scanAll(args):
         mpiexec -n 180 -f machinefile ./genfilepath ./tmp ./result
         """
         #mpiCommandGenFilePath = "mpiexec -f ./machinefile -n " + str(processNum) + " ./genfilepath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
-        mpiCommandGenFilePath = "mpirun -n " + str(processNum) + " ./genFilePath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
+        #mpiCommandGenFilePath = "mpirun -n " + str(processNum) + " ./genFilePath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
+        mpiCommandGenFilePath = "mpiexec -f ./machinefile -n " + str(processNum) + " ./genFilePath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
 
         logger.info("mpiCommandGenFilePath = " + mpiCommandGenFilePath)
 
@@ -1698,8 +1699,8 @@ def scanAll(args):
         mpiexec -f machinefile -n 24 ./statfilepath tmp tmp huabin
         """
         #mpicommandstatfilepath = "mpiexec -f ./machinefile -n " + str(processNum) + " ./statfilepath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
-        mpicommandstatfilepath = "mpirun -n " + str(processNum) + " ./statFilePath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
-
+        #mpicommandstatfilepath = "mpirun -n " + str(processNum) + " ./statFilePath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
+        mpicommandstatfilepath = "mpiexec -f ./machinefile -n " + str(processNum) + " ./statFilePath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
         logger.info("mpicommandstatfilepath = " + mpicommandstatfilepath)
 
         """
@@ -1859,8 +1860,8 @@ def scanFromPathFileList(args):
         mpiexec -f machinefile -n 24 ./statfilepath tmp tmp huabin
         """
         #mpicommandstatfilepath = "mpiexec -f ./machinefile -n " + str(processNum) + " ./statfilepath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
-        mpicommandstatfilepath = "mpirun -n " + str(processNum) + " ./statFilePath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
-
+        #mpicommandstatfilepath = "mpirun -n " + str(processNum) + " ./statFilePath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
+        mpicommandstatfilepath = "mpiexec -f ./machinefile -n  " + str(processNum) + " ./statFilePath" + " " + intermediateResultDir + " " + intermediateResultDir + " " + fileNamePrefix 
         logger.info("mpicommandstatfilepath = " + mpicommandstatfilepath)
 
         """

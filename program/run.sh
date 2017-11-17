@@ -20,15 +20,18 @@
 set -o nounset                              # Treat unset variables as an error
 rm -rf scaner*.log
 
-if [ -d result2 ]
+if [ -d result3 ]
 then
     echo "Directory [result2] is exist, start to delete"
-    rm -rf result2/*.txt
+    rm -rf result3/*.txt
 fi
 
-if [ -d tmp2 ]
+if [ -d tmp3 ]
 then
     echo "Directory [tmp2] is exist, start to delete"
-    rm -rf tmp2/*.txt
+    rm -rf tmp3/*.txt
 fi
-python smartDirScanner.py -i ../ShareEM/ -n 20 -x 1 -d result2 -m tmp2
+
+export PATH=/Share/home/hbruan/DirScanner/mpich/bin:$PATH
+export LD_LIBRARY_PATH=/Share/home/hbruan/DirScanner/mpich/lib
+python smartDirScanner.py -i $1 -n 24 -x 1 -d ./20171117Result -m 20171117Tmp

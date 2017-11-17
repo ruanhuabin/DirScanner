@@ -1,5 +1,5 @@
 # this gives access to the mpich header files
-prefix=/root/DirScanner/mpich
+prefix=/Share/home/hbruan/DirScanner/mpich
 exec_prefix=${prefix}
 libdir=${exec_prefix}/lib
 includedir=${prefix}/include

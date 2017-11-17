@@ -1,4 +1,4 @@
-#! /usr/bin/bash
+#! /bin/bash
 # 
 # (C) 2006 by Argonne National Laboratory.
 #     See COPYRIGHT in top-level directory.
@@ -26,11 +26,11 @@
 # Set the default values of all variables.
 #
 # Directory locations: Fixed for any MPI implementation
-prefix=/root/DirScanner/mpich
-exec_prefix=/root/DirScanner/mpich
-sysconfdir=/root/DirScanner/mpich/etc
-includedir=/root/DirScanner/mpich/include
-libdir=/root/DirScanner/mpich/lib
+prefix=/Share/home/hbruan/DirScanner/mpich
+exec_prefix=/Share/home/hbruan/DirScanner/mpich
+sysconfdir=/Share/home/hbruan/DirScanner/mpich/etc
+includedir=/Share/home/hbruan/DirScanner/mpich/include
+libdir=/Share/home/hbruan/DirScanner/mpich/lib
 
 # Default settings for compiler, flags, and libraries
 CXX="g++"

@@ -38,4 +38,4 @@ dlopen=''
 dlpreopen=''
 
 # Directory that this library needs to be installed in:
-libdir='/root/DirScanner/mpich/lib'
+libdir='/Share/home/hbruan/DirScanner/mpich/lib'
