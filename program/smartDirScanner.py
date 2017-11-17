@@ -234,6 +234,7 @@ def getTimeGap(time1, time2):
     @output:The item in result list is like: "200 days, 12:12:56"
     """
     FMT = '%Y-%m-%d-%H:%M:%S'
+    logger.info("time1 = {0}, time2 = {1}".format(str(time1), str(time2)))
     tdelta = datetime.strptime(time2, FMT) - datetime.strptime(time1, FMT)    
     tdelta = str(tdelta)    
     items = tdelta.split(',')
@@ -576,8 +577,9 @@ def calculate_time_gap(ftGapDetail):
         
     tmGapPeriod = {}
     tmGapMaxIndex = len(tmGapTable) - 1
+    lineNum = 0
     for(k,v) in ftGapNew.iteritems():
-
+    lineNum = lineNum + 1
         for vv in v:
             tmIndex = vv[0] / 30
             fileSize = vv[1]
@@ -585,8 +587,13 @@ def calculate_time_gap(ftGapDetail):
             if(tmIndex > tmGapMaxIndex):
                 tmIndex = tmGapMaxIndex
             
-            
-            newKey = k + "(" + tmGapTable[tmIndex] + ")"
+            try:
+                newKey = k + "(" + tmGapTable[tmIndex] + ")"
+            except Exception as exception:
+                traceback.print_exc(file=sys.stdout)
+                logger.info("tmIndex = {0}:maxIndex = {1}".format(tmIndex, tmGapMaxIndex))
+                exit()
+
             if(tmGapPeriod.has_key(newKey)):
                 currValue = tmGapPeriod[newKey]
                 currCnt = currValue[0] + 1
