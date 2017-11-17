@@ -579,7 +579,6 @@ def calculate_time_gap(ftGapDetail):
     tmGapMaxIndex = len(tmGapTable) - 1
     lineNum = 0
     for(k,v) in ftGapNew.iteritems():
-        lineNum = lineNum + 1
         for vv in v:
             tmIndex = vv[0] / 30
             fileSize = vv[1]
@@ -600,6 +599,11 @@ def calculate_time_gap(ftGapDetail):
             else:
                 tmGapPeriod[newKey] =  (1, fileSize)
                 
+        lineNum = lineNum + 1
+        if(lineNum % 100000 == 0):
+            logger.info("{0} lines finish processing")
+
+    logger.info("{0} lines finish processing")
     """
     (key, value) in ftGapNew is like:{"[file extention]"==>[(dayGap, "this file size"), (dayGap, "this file size")], .....}
     (key value) in tmpGapPeriod is like: {".mrc(090-120)" ==> (120, 55555)}, means that there 120 files that were accessed in 90~120 days, these files total size is 55555 bytes 
@@ -1629,8 +1633,8 @@ def scanAll(args):
         increasingFileList = list(currAllPaths - historyAllPaths)
         logger.info("End to get increasing file list, file count: {0}".format(len(increasingFileList)))
 
-        reducingfilename = intermediateResultDir + "reducingfile.txt"
-        increasingfilename = intermediateResultDir + "increasingfile.txt"
+        reducingfilename = outputDir + "reducingfile.txt"
+        increasingfilename = outputDir + "increasingfile.txt"
         fileHandle1 = open(reducingfilename, "w")
         fileHandle2 = open(increasingfilename, "w")
 
