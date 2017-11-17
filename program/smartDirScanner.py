@@ -1385,7 +1385,8 @@ def statFile(fname):
             logger.warn("{0}:{1}:Exception Detail: {2}".format(processName, fname, str(exception)))
             traceback.print_exc(file=sys.stdout)
     else:
-        logger.error("File is not file: {0}".format(fname))
+        logger.error("File is not file:{},  file maybe deleted".format(fname))
+        fileStatInfo = "None"
 
     return fileStatInfo
 
@@ -1408,7 +1409,8 @@ def mergeWithHistoryStatFile(historyStatFile, increasingFileList, reducingFileLi
 
     for (index, fn) in enumerate(increasingFileList):
         statInfo = statFile(fn)
-        histStatInfoDict[fn] = statInfo
+        if(statInfo != "None"):
+            histStatInfoDict[fn] = statInfo
 
         if((index + 1) % 10000 == 0):
             logger.info("{0} lines finish processing".format(index + 1))
